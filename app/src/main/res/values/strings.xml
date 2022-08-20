@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">AllChat</string>
+    <string name="message_text_field_placeholder">Type a message...</string>
+</resources>
