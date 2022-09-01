@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="composing">
+        <item quantity="one">@string/composing_one</item>
+        <item quantity="other">@string/composing_other</item>
+    </plurals>
+</resources>

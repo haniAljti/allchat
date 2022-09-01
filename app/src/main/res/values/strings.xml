@@ -1,4 +1,31 @@
 <resources>
     <string name="app_name">AllChat</string>
-    <string name="message_text_field_placeholder">Type a message...</string>
+    <string name="message_text_field_placeholder">Type a message…</string>
+    <string name="composing_one">%s is writing…</string>
+    <string name="composing_other">%s are writing…</string>
+    <string name="last_online_today">Last online today at %s</string>
+    <string name="last_online_yesterday">Last online yesterday at %s</string>
+    <string name="last_online_other">Last online at %s</string>
+    <string name="last_online_other_pattern">d MMMM yyyy</string>
+    <string name="online">Online</string>
+
+    //File Picker
+    <string name="choose_pdf_title">Choose an app to open the pdf file with</string>
+    <string name="open_gallery">Open gallery</string>
+    <string name="open_camera">Open camera</string>
+    <string name="choose_pdf">Choose PDF file</string>
+
+    //Separators
+    <string name="separator_today">Today</string>
+    <string name="separator_yesterday">Yesterday</string>
+    <string name="separator_last_month">Last Month</string>
+    <string name="separator_last_year">Last Year</string>
+    <string name="separator_other_date_pattern">d MMMM yyyy</string>
+
+    //Last Online
+    <string name="today">Today</string>
+    <string name="yesterday">Yesterday</string>
+    <string name="last_month">Last Month</string>
+    <string name="last_year">Last Year</string>
+    <string name="other_date_pattern">dd/MM/yyyy</string>
 </resources>

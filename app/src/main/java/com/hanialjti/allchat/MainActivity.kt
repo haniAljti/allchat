@@ -6,57 +6,115 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material.Text
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.tooling.preview.Preview
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.lifecycleScope
 import androidx.navigation.compose.rememberNavController
 import com.google.accompanist.navigation.material.ExperimentalMaterialNavigationApi
 import com.google.accompanist.navigation.material.rememberBottomSheetNavigator
 import com.hanialjti.allchat.ui.NavigationLayout
+import com.hanialjti.allchat.ui.skin.AllChatChatScreenSkin
+import com.hanialjti.allchat.ui.skin.AllChatConversationScreenSkin
+import com.hanialjti.allchat.ui.skin.DefaultChatScreenSkin
+import com.hanialjti.allchat.ui.skin.DefaultConversationScreenSkin
 import com.hanialjti.allchat.ui.theme.AllChatTheme
+import com.hanialjti.allchat.xmpp.XmppConnectionHelper
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
-    @OptIn(ExperimentalMaterialNavigationApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         setContent {
 
-            val bottomSheetNavigator = rememberBottomSheetNavigator()
-            val navController = rememberNavController(bottomSheetNavigator)
+            val lifecycle by rememberUpdatedState(newValue = LocalLifecycleOwner.current)
 
-            AllChatTheme {
-                Box {
-                    Image(
-                        painter = painterResource(id = R.drawable.background),
-                        contentDescription = null,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
-                    NavigationLayout(
-                        bottomSheetNavigator = bottomSheetNavigator,
-                        navController = navController,
-                    )
-                }
-            }
+            AllChat(
+                chatSkin = DefaultChatScreenSkin,
+                conversationSkin = DefaultConversationScreenSkin,
+                lifecycleOwner = lifecycle,
+                connectionManager = XmppConnectionHelper
+            )
+//            val bottomSheetNavigator = rememberBottomSheetNavigator()
+//            val navController = rememberNavController(bottomSheetNavigator)
+
+//            AllChatTheme {
+//                Box {
+//                    Image(
+//                        painter = painterResource(id = R.drawable.background),
+//                        contentDescription = null,
+//                        modifier = Modifier.fillMaxSize(),
+//                        contentScale = ContentScale.Crop
+//                    )
+//                    NavigationLayout(
+//                        bottomSheetNavigator = bottomSheetNavigator,
+//                        navController = navController,
+//                    )
+//                }
+//            }
         }
     }
 }
 
-@Composable
-fun Greeting(name: String) {
-    Text(text = "Hello $name!")
-}
 
-@Preview(showBackground = true)
+@OptIn(ExperimentalMaterialNavigationApi::class)
 @Composable
-fun DefaultPreview() {
-    AllChatTheme {
-        Greeting("Android")
+fun AllChat(
+    chatSkin: AllChatChatScreenSkin,
+    conversationSkin: AllChatConversationScreenSkin,
+    lifecycleOwner: LifecycleOwner,
+    connectionManager: ConnectionManager
+) {
+
+    val bottomSheetNavigator = rememberBottomSheetNavigator()
+    val navController = rememberNavController(bottomSheetNavigator)
+
+    DisposableEffect(
+        AllChatTheme {
+            Box {
+                Image(
+                    painter = painterResource(id = R.drawable.background),
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+                NavigationLayout(
+                    bottomSheetNavigator = bottomSheetNavigator,
+                    navController = navController,
+                )
+            }
+        },
+        lifecycleOwner
+    ) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> {
+                    lifecycleOwner.lifecycleScope.launch {
+                        connectionManager.connect("hani", "15960400")
+                    }
+                }
+                Lifecycle.Event.ON_PAUSE -> {
+                    lifecycleOwner.lifecycleScope.launch {
+                        connectionManager.disconnect()
+                    }
+                }
+                else -> {}
+            }
+        }
+
+        lifecycleOwner.lifecycle.addObserver(observer)
+
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
     }
 }
