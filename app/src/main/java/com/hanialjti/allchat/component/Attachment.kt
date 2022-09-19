@@ -2,11 +2,11 @@ package com.hanialjti.allchat.component
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import com.hanialjti.allchat.models.UiAttachment
+import com.hanialjti.allchat.models.Attachment
 
 @Composable
 fun Attachment(
-    attachment: UiAttachment,
+    attachment: Attachment,
     modifier: Modifier = Modifier,
     onResumeAudio: () -> Unit,
     onPauseAudio: () -> Unit,
@@ -17,7 +17,7 @@ fun Attachment(
     lastTrackPosition: Int
 ) {
     when (attachment) {
-        is UiAttachment.Image -> {
+        is Attachment.Image -> {
             val imageSource = attachment.url ?: attachment.cacheUri
             imageSource?.let {
                 ImageAttachment(
@@ -27,7 +27,7 @@ fun Attachment(
                 )
             }
         }
-        is UiAttachment.Recording -> AudioAttachment(
+        is Attachment.Recording -> AudioAttachment(
             recording = attachment,
             onResumeAudio = onResumeAudio,
             onPauseAudio = onPauseAudio,
@@ -35,7 +35,7 @@ fun Attachment(
             isActiveMessage = isActiveMessage,
             lastTrackPosition = lastTrackPosition
         )
-        is UiAttachment.Pdf -> PdfFileAttachment(
+        is Attachment.Pdf -> PdfFileAttachment(
             pdf = attachment,
             onPdfClicked = onPdfClicked,
             modifier = Modifier

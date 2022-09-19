@@ -1,50 +1,72 @@
 package com.hanialjti.allchat.viewmodels
 
-import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.paging.cachedIn
+import androidx.paging.filter
 import androidx.paging.map
+import androidx.work.OneTimeWorkRequestBuilder
 import com.hanialjti.allchat.R
+import com.hanialjti.allchat.datastore.UserPreferencesManager
 import com.hanialjti.allchat.models.*
-import com.hanialjti.allchat.models.entity.Media
+import com.hanialjti.allchat.models.entity.Conversation
 import com.hanialjti.allchat.models.entity.Message
-import com.hanialjti.allchat.repository.ChatRepository
+import com.hanialjti.allchat.models.entity.Type
+import com.hanialjti.allchat.models.entity.User
+import com.hanialjti.allchat.repository.XmppChatRepository
 import com.hanialjti.allchat.repository.ConversationRepository
+import com.hanialjti.allchat.repository.UserRepository
 import com.hanialjti.allchat.utils.asLocalDateTime
-import com.hanialjti.allchat.utils.getDateText
+import com.hanialjti.allchat.utils.asUiDate
 import com.hanialjti.allchat.utils.getDefaultDrawableRes
-import dagger.hilt.android.lifecycle.HiltViewModel
+import com.hanialjti.allchat.worker.SendMessageWorker
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
-import javax.inject.Inject
+import timber.log.Timber
 
-@HiltViewModel
-class ChatViewModel @Inject constructor(
-    private val chatRepository: ChatRepository,
-    private val conversationRepository: ConversationRepository
+@OptIn(ExperimentalCoroutinesApi::class)
+class ChatViewModel(
+    private val chatRepository: XmppChatRepository,
+    private val conversationRepository: ConversationRepository,
+    private val userRepository: UserRepository,
+    private val userPreferencesManager: UserPreferencesManager,
+    private val conversationId: String,
+    private val isGroupChat: Boolean
 ) : ViewModel() {
 
     private val _chatUiState = MutableStateFlow(ChatScreenUiState())
     val uiState: StateFlow<ChatScreenUiState> get() = _chatUiState
 
-    fun getMessages(conversation: String) =
-        chatRepository
-            .messages(conversation)
-            .map { messages ->
-                messages.map {
-                    UiMessage(
-                        id = it.id,
-                        body = it.body,
-                        timestamp = it.timestamp,
-                        from = it.from,
-                        status = it.status,
-                        readBy = it.readBy,
-                        type = it.type,
-                        attachment = it.media?.toAttachment() ?: it.location?.toAttachment(),
-                    )
+    val messages = userPreferencesManager
+        .username
+        .flatMapLatest {
+            chatRepository
+                .messages(conversationId, it)
+                .distinctUntilChanged()
+                .map { messages ->
+                    messages
+                        .filter { message ->
+                            message.body != null || message.media != null || message.location != null
+                        }
+                        .map { message ->
+                        UiMessage(
+                            id = message.id,
+                            body = message.body,
+                            timestamp = message.timestamp,
+                            from = message.from,
+                            status = message.status,
+                            readBy = message.readBy,
+                            type = message.type,
+                            attachment = message.media?.asAttachment() ?: message.location?.asAttachment(),
+                        )
+                    }
                 }
-            }.cachedIn(viewModelScope)
+                .cachedIn(viewModelScope)
+        }
+        .cachedIn(viewModelScope)
+
+    private var _shouldInitializeConversation: Boolean = false
 
     fun saveMessageContentUri(message: UiMessage, cacheContentUri: String) {
         viewModelScope.launch {
@@ -52,34 +74,80 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    fun getAttachment(messageId: String) = chatRepository.getMessageById(messageId).map {
-        it.media?.toAttachment()
+    fun markMessageAsDisplayed(messageId: String) {
+        viewModelScope.launch { chatRepository.markMessageAsDisplayed(messageId) }
     }
 
-    fun sendMessage() {
+    fun getAttachment(messageId: String) = chatRepository.getMessageFlowById(messageId).map {
+        it.media?.asAttachment()
+    }
+
+    private fun updateMyChatState(chatState: ChatState) {
         viewModelScope.launch {
-            val textInput = _chatUiState.value.textInput
-            val attachment = _chatUiState.value.attachment
+            chatRepository.updateMyChatState(
+                chatState
+            )
+        }
+    }
 
-            if (textInput != "" || attachment != null) {
-                chatRepository.sendMessage(
-                    Message(
-                        body = textInput,
-                        media = attachment?.toMedia(),
-                        conversation = _chatUiState.value.conversation,
-                        from = _chatUiState.value.owner,
-                        status = "pending"
-                    )
-                )
-            }
+    fun sendMessage() = viewModelScope.launch {
 
-            _chatUiState.update {
-                it.copy(
-                    textInput = "",
-                    attachment = null
+        val textInput = _chatUiState.value.textInput
+        val attachment = _chatUiState.value.attachment
+        val owner = _chatUiState.value.owner
+
+        if (_shouldInitializeConversation) {
+            createConversationAndUser()?.let { it1 ->
+                conversationRepository.insertConversationAndUser(
+                    it1
                 )
             }
         }
+
+        _chatUiState.update {
+            it.copy(
+                textInput = "",
+                attachment = null
+            )
+        }
+
+        if (textInput != "" || attachment != null) {
+            val message = Message(
+                body = textInput,
+                media = attachment?.asMedia(),
+                conversation = conversationId,
+                from = owner,
+                owner = owner,
+                type = if (isGroupChat) Type.GroupChat else Type.Chat
+            )
+            chatRepository.saveTempMessage(message)
+        }
+    }
+
+    private fun createConversationAndUser(): ConversationAndUser? {
+
+        val contactImage = _chatUiState.value.image
+        val owner = _chatUiState.value.owner
+
+        val image: String? = if (contactImage is ContactImage.DynamicImage)
+            contactImage.imageUrl else null
+
+        val conversation = owner?.let {
+            Conversation(
+                id = conversationId,
+                isGroupChat = isGroupChat,
+                name = _chatUiState.value.name,
+                imageUrl = image,
+                from = it,
+                to = if (isGroupChat) null else conversationId
+            )
+        }
+        val user = User(
+            id = conversationId,
+            name = _chatUiState.value.name,
+            image = image
+        )
+        return conversation?.let { ConversationAndUser(it, user) }
     }
 
     fun updateTextInput(text: String) {
@@ -88,20 +156,47 @@ class ChatViewModel @Inject constructor(
                 it.copy(textInput = text)
             }
         }
+
+        updateMyChatState(
+            if (text.isEmpty()) {
+                ChatState.Paused(conversationId)
+            } else {
+                ChatState.Composing(conversationId)
+            }
+        )
+
     }
 
-    fun setConversation(conversation: String, owner: String?) {
+    fun initializeChat(
+        conversationId: String,
+        isGroupChat: Boolean,
+        initialName: String? = null,
+        initialImage: String? = null
+    ) {
         viewModelScope.launch {
             _chatUiState.update {
                 it.copy(
-                    conversation = conversation,
-                    owner = owner
+                    image = initialImage?.let { image -> ContactImage.DynamicImage(image) }
+                        ?: ContactImage.ImageRes(drawableRes = if (isGroupChat) R.drawable.ic_group else R.drawable.ic_user),
+                    name = initialName ?: defaultName,
                 )
             }
-            observeChatStatus(
-                conversation
-            )
+            observeChatStatus(conversationId)
         }
+        viewModelScope.launch {
+            userPreferencesManager.username
+                .collectLatest { username ->
+                    _chatUiState.update { it.copy(owner = username) }
+                }
+        }
+
+//        _conversationId = conversationId
+//        _isGroupChat = isGroupChat
+        updateMyChatState(ChatState.Active(conversationId))
+    }
+
+    fun resetUnreadCounter() {
+        viewModelScope.launch { conversationRepository.resetUnreadCounter(conversationId) }
     }
 
     private fun observeChatStatus(conversationId: String) {
@@ -109,73 +204,69 @@ class ChatViewModel @Inject constructor(
             conversationRepository
                 .conversation(conversationId)
                 .collectLatest { conversationAndUser ->
-                    updateChatInfo(
-                        name = conversationAndUser.name,
-                        image = if (conversationAndUser.image != null) ContactImage.DynamicImage(
-                            conversationAndUser.image
-                        ) else ContactImage.ImageRes(getDefaultDrawableRes(conversationAndUser.conversation.isGroupChat)),
-                        status = conversationAndUser.conversation.otherComposingUsers?.let { composing ->
-                            UiText.PluralStringResource(
-                                R.plurals.composing,
-                                composing.count,
-                                composing.userListString
+
+                    if (conversationAndUser == null) {
+                        _shouldInitializeConversation = true
+                        Timber.d("Conversation is not yet initialized!")
+                    }
+
+                    conversationAndUser?.let {
+                        _chatUiState.update {
+                            it.copy(
+                                name = conversationAndUser.name ?: defaultName,
+                                image = if (conversationAndUser.image != null) ContactImage.DynamicImage(
+                                    conversationAndUser.image
+                                ) else ContactImage.ImageRes(
+                                    getDefaultDrawableRes(
+                                        conversationAndUser.conversation.isGroupChat
+                                    )
+                                ),
+                                status = getConversationContent(conversationAndUser)
                             )
-                        } ?: conversationAndUser.user?.let {
-                            if (it.isOnline) {
-                                UiText.StringResource(
-                                    R.string.online
-                                )
-                            } else if (it.lastOnline != null){
-                                it.lastOnline.asLocalDateTime().getDateText().asLastOnlineUiText()
-                            } else null
                         }
-                    )
+                    }
                 }
         }
     }
 
+    private suspend fun getConversationContent(conversationAndUser: ConversationAndUser): UiText? {
+        val composingUsers = conversationAndUser
+            .conversation
+            .otherComposingUsers
 
-    private fun updateChatInfo(
-        name: String?,
-        image: ContactImage?,
-        status: UiText? = null
-    ) {
-        viewModelScope.launch {
-            _chatUiState.update {
-                it.copy(
-                    name = name ?: defaultName,
-                    image = image,
-                    status = status
-                )
+        return if (conversationAndUser.conversation.isGroupChat && composingUsers.isNotEmpty()) {
+            val users = userRepository.getUsers(composingUsers)
+            UiText.PluralStringResource(
+                R.plurals.composing,
+                composingUsers.size,
+                users.joinToString()
+            )
+        } else if (!conversationAndUser.conversation.isGroupChat && composingUsers.isNotEmpty()) {
+            UiText.StringResource(R.string.composing)
+        } else {
+            conversationAndUser.user?.let { user ->
+                val isOnline = user.isOnline
+                val lastOnline = user.lastOnline
+                if (isOnline) {
+                    UiText.StringResource(R.string.online)
+                } else
+                    lastOnline
+                        ?.asLocalDateTime()
+                        ?.asUiDate()
+                        ?.asLastOnlineUiText()
             }
         }
     }
 
-    private fun updateStatus(status: UiText? = null) {
-        viewModelScope.launch {
-            _chatUiState.update {
-                it.copy(
-                    status = status
-                )
-            }
-        }
+    fun setThisChatAsInactive() {
+        updateMyChatState(ChatState.Inactive(conversationId))
     }
 
-    fun updateAttachment(attachment: UiAttachment?) {
+    fun updateAttachment(attachment: Attachment?) {
         viewModelScope.launch {
             _chatUiState.update {
                 it.copy(
                     attachment = attachment
-                )
-            }
-        }
-    }
-
-    fun updateCurrentlyPlayingMedia(isPaused: Boolean = false) {
-        viewModelScope.launch {
-            _chatUiState.update {
-                it.copy(
-                    isPaused = isPaused
                 )
             }
         }
@@ -196,20 +287,11 @@ class ChatViewModel @Inject constructor(
 
 const val defaultName = "AllChat User"
 
-data class Attachment(
-    val name: String? = null,
-    val type: Media.Type,
-    val uri: Uri,
-    val duration: Long? = null
-)
-
 data class ChatScreenUiState(
-    val conversation: String? = null,
     val textInput: String = "",
-    val attachment: UiAttachment? = null,
-    val isPaused: Boolean = false,
-    val owner: String? = null,
+    val attachment: Attachment? = null,
     val name: String = defaultName,
+    val owner: String? = null,
     val image: ContactImage? = null,
     val status: UiText? = null,
     val trackPositions: MutableMap<String, Int> = mutableMapOf()

@@ -1,8 +1,7 @@
 package com.hanialjti.allchat.models
 
 import com.hanialjti.allchat.exception.NotSupportedException
-import com.hanialjti.allchat.models.entity.Location
-import com.hanialjti.allchat.models.entity.Media
+import com.hanialjti.allchat.models.entity.*
 import com.hanialjti.allchat.utils.currentTimestamp
 
 data class UiMessage(
@@ -10,13 +9,13 @@ data class UiMessage(
     val body: String? = null,
     val timestamp: Long = currentTimestamp,
     val from: String? = null,
-    val status: String? = null,
-    val readBy: Set<String> = setOf(),
-    val type: String? = null,
-    val attachment: UiAttachment? = null
+    val status: Status? = null,
+    val readBy: Set<String>? = setOf(),
+    val type: Type? = null,
+    val attachment: Attachment? = null
 )
 
-sealed class UiAttachment(
+sealed class Attachment(
     private val url: String? = null,
     private val name: String? = null,
     private val cacheUri: String? = null,
@@ -37,7 +36,7 @@ sealed class UiAttachment(
         val size: Int?,
         val width: Int?,
         val height: Int?
-    ) : UiAttachment(
+    ) : Attachment(
         url = url,
         name = name,
         cacheUri = cacheUri,
@@ -54,7 +53,7 @@ sealed class UiAttachment(
         val cacheUri: String?,
         val size: Int?,
         val duration: Int
-    ) : UiAttachment(
+    ) : Attachment(
         url = url,
         name = name,
         cacheUri = cacheUri,
@@ -69,7 +68,7 @@ sealed class UiAttachment(
         val name: String,
         val cacheUri: String?,
         val size: Int?,
-    ) : UiAttachment(
+    ) : Attachment(
         url = url,
         name = name,
         cacheUri = cacheUri,
@@ -81,14 +80,14 @@ sealed class UiAttachment(
     class Location(
         val lat: Double?,
         val lng: Double?
-    ): UiAttachment(
+    ): Attachment(
         lat = lat,
         lng = lng
     )
 
-    fun toMedia() = Media(url, name, cacheUri, mimeType, duration?.toLong(), type, size)
+    fun asMedia() = Media(url, name, cacheUri, mimeType, duration?.toLong(), type, size)
 
-    fun toDownloadableAttachment() = when (this) {
+    fun asDownloadableAttachment() = when (this) {
         is Image -> url?.let { DownloadableAttachment(it, defaultAttachmentName, ".png") }
         is Recording -> url?.let { DownloadableAttachment(it, defaultAttachmentName, ".mp4") }
         is Pdf -> url?.let { DownloadableAttachment(it, defaultAttachmentName, ".pdf") }
@@ -100,16 +99,16 @@ data class DownloadableAttachment(val url: String, val name: String, val extensi
 
 val defaultAttachmentName = "AC_$currentTimestamp"
 
-fun Media.toAttachment() = when (type) {
-    Media.Type.Image -> UiAttachment.Image(
+fun Media.asAttachment() = when (type) {
+    Media.Type.Image -> Attachment.Image(
         url, name ?: defaultAttachmentName, cacheUri, size, width, height)
-    Media.Type.Audio -> UiAttachment.Recording(
+    Media.Type.Audio -> Attachment.Recording(
         url, name ?: defaultAttachmentName, cacheUri, size, duration?.toInt() ?: 0
     )
-    Media.Type.Pdf -> UiAttachment.Pdf(url, name ?: defaultAttachmentName, cacheUri, size)
+    Media.Type.Pdf -> Attachment.Pdf(url, name ?: defaultAttachmentName, cacheUri, size)
     else -> throw NotSupportedException("Other Attachment types are not supported for now!")
 }
 
-fun Location.toAttachment() = UiAttachment.Location(lat, lng)
+fun Location.asAttachment() = Attachment.Location(lat, lng)
 
 

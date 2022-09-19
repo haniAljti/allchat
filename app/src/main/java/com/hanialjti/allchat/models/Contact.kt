@@ -6,6 +6,7 @@ import androidx.annotation.StringRes
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
@@ -24,7 +25,7 @@ import com.hanialjti.allchat.ui.theme.Green
 
 data class Contact(
     val id: String,
-    val lastUpdated: Long,
+    val lastUpdated: Long?,
     val composing: List<String> = listOf(),
     val content: ContactInfo? = null,
     val name: String?,
@@ -57,17 +58,17 @@ sealed class ContactImage {
         is ImageRes -> Image(
             painter = painterResource(id = drawableRes),
             contentDescription = null,
-            colorFilter = ColorFilter.tint(Color.White),
+            colorFilter = ColorFilter.tint(MaterialTheme.colors.primary),
             modifier = modifier
-                .border(width = 3.dp, color = Color.White, shape = CircleShape)
+                .border(width = 3.dp, color = MaterialTheme.colors.primary, shape = CircleShape)
                 .clip(CircleShape)
         )
     }
 }
 
-sealed class ContactInfo(val text: UiText, val color: Color, val bold: Boolean) {
-    class LastMessage(text: UiText, read: Boolean): ContactInfo(text, if (read) Color.White else Green, !read)
-    class Composing(text: UiText): ContactInfo(text, Green, false)
+sealed class ContactInfo(val text: UiText) {
+    class LastMessage(text: UiText, val read: Boolean): ContactInfo(text)
+    class Composing(text: UiText): ContactInfo(text)
 }
 
 sealed class UiText {

@@ -23,7 +23,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import coil.compose.rememberAsyncImagePainter
 import com.hanialjti.allchat.R
-import com.hanialjti.allchat.models.UiAttachment
+import com.hanialjti.allchat.models.Attachment
 import com.hanialjti.allchat.ui.theme.Gray
 import com.hanialjti.allchat.ui.theme.Green
 import kotlinx.coroutines.delay
@@ -34,7 +34,7 @@ import kotlin.time.toKotlinDuration
 fun TextInput(
     modifier: Modifier = Modifier,
     message: String,
-    attachment: UiAttachment? = null,
+    attachment: Attachment? = null,
     sendButtonEnabled: Boolean = true,
     attachmentButtonVisible: Boolean = true,
     recordButtonVisible: Boolean = true,
@@ -56,7 +56,7 @@ fun TextInput(
                     .height(200.dp)
             ) {
                 when (attachment) {
-                    is UiAttachment.Image -> {
+                    is Attachment.Image -> {
 
                         Image(
                             painter = rememberAsyncImagePainter(attachment.cacheUri),

@@ -14,7 +14,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.res.ResourcesCompat
 import com.hanialjti.allchat.R
-import com.hanialjti.allchat.models.UiAttachment
+import com.hanialjti.allchat.models.Attachment
 import com.hanialjti.allchat.ui.screens.AudioPlayBackButton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -24,7 +24,7 @@ import java.io.File
 
 @Composable
 fun AudioAttachment(
-    recording: UiAttachment.Recording,
+    recording: Attachment.Recording,
     onSeekValueChanged: (Int) -> Unit,
     onResumeAudio: () -> Unit,
     onPauseAudio: () -> Unit,

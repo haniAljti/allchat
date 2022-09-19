@@ -1,6 +1,7 @@
 <resources>
     <string name="app_name">AllChat</string>
     <string name="message_text_field_placeholder">Type a message…</string>
+    <string name="composing">is writing…</string>
     <string name="composing_one">%s is writing…</string>
     <string name="composing_other">%s are writing…</string>
     <string name="last_online_today">Last online today at %s</string>

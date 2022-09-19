@@ -2,54 +2,119 @@ package com.hanialjti.allchat.viewmodels
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.paging.cachedIn
-import androidx.paging.map
+import com.hanialjti.allchat.ConnectionManager
 import com.hanialjti.allchat.R
-import com.hanialjti.allchat.models.Contact
-import com.hanialjti.allchat.models.ContactImage
-import com.hanialjti.allchat.models.ContactInfo
-import com.hanialjti.allchat.models.UiText
+import com.hanialjti.allchat.datastore.UserPreferencesManager
+import com.hanialjti.allchat.models.*
 import com.hanialjti.allchat.repository.ConversationRepository
+import com.hanialjti.allchat.repository.UserRepository
 import com.hanialjti.allchat.utils.getDefaultDrawableRes
-import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.map
-import javax.inject.Inject
+import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.launch
+import timber.log.Timber
 
-@HiltViewModel
-class ConversationsViewModel @Inject constructor(
-    private val conversationRepository: ConversationRepository
+class ConversationsViewModel constructor(
+    private val conversationRepository: ConversationRepository,
+    private val userRepository: UserRepository,
+    private val userPreferencesManager: UserPreferencesManager,
+    private val connectionManager: ConnectionManager
 ) : ViewModel() {
 
-    fun conversations(owner: String) = conversationRepository
-        .conversations(owner)
-        .map { conversationsAndUsers ->
-            conversationsAndUsers.map {
-                Contact(
-                    id = it.conversation.id,
-                    lastUpdated = it.conversation.lastUpdated,
-                    name = it.name,
-                    image = if (it.image != null) ContactImage.DynamicImage(it.image) else ContactImage.ImageRes(
-                        getDefaultDrawableRes(it.conversation.isGroupChat)
-                    ),
-                    unreadMessages = it.conversation.unreadMessages,
-                    isOnline = !it.conversation.isGroupChat && it.user?.isOnline == true,
-                    isGroupChat = it.conversation.isGroupChat,
-                    content = it.conversation.otherComposingUsers?.let { composing ->
-                        ContactInfo.Composing(
-                            text = UiText.PluralStringResource(
-                                R.plurals.composing,
-                                composing.count,
-                                composing.userListString
-                            )
-                        )
-                    } ?: it.conversation.lastMessage?.let { message ->
-                        ContactInfo.LastMessage(
-                            text = UiText.DynamicString(message),
-                            read = it.conversation.unreadMessages == 0
-                        )
+    private val _uiState = MutableStateFlow(ConversationUiState())
+    val uiState: StateFlow<ConversationUiState> get() = _uiState
+
+    init {
+        viewModelScope.launch {
+            connectionManager
+                .observeConnectivityStatus()
+                .combine(userPreferencesManager.username) { connectionStatus, username ->
+                    Timber.d("Xmpp status: ${connectionStatus.name}")
+                    State(
+                        isConnected = connectionStatus == ConnectionManager.Status.Connected,
+                        owner = username
+                    )
+                }
+                .collectLatest {
+                    if (it.isConnected && it.owner != null) {
+                        conversationRepository.loadAllContacts(it.owner)
                     }
+                }
+        }
+        viewModelScope.launch {
+            userPreferencesManager.username
+                .collectLatest {
+                    it?.let { username ->
+                        conversations(username)
+                    }
+                }
+        }
+    }
+
+    private fun conversations(owner: String) {
+        viewModelScope.launch {
+            conversationRepository
+                .conversations(owner)
+                .map { conversationAndUserList ->
+                    conversationAndUserList
+                        .sortedByDescending { it.conversation.lastUpdated }
+                        .map { conversationAndUser ->
+                            Contact(
+                                id = conversationAndUser.conversation.id,
+                                lastUpdated = conversationAndUser.conversation.lastUpdated,
+                                name = conversationAndUser.name,
+                                image = if (conversationAndUser.image != null) ContactImage.DynamicImage(
+                                    conversationAndUser.image
+                                ) else ContactImage.ImageRes(
+                                    getDefaultDrawableRes(conversationAndUser.conversation.isGroupChat)
+                                ),
+                                unreadMessages = conversationAndUser.conversation.unreadMessages,
+                                isOnline = !conversationAndUser.conversation.isGroupChat && conversationAndUser.user?.isOnline == true,
+                                isGroupChat = conversationAndUser.conversation.isGroupChat,
+                                content = getConversationContent(conversationAndUser)
+                            )
+                        }
+                }
+                .collectLatest { contactList ->
+                    _uiState.update {
+                        it.copy(contacts = contactList)
+                    }
+                }
+        }
+    }
+
+    private suspend fun getConversationContent(conversationAndUser: ConversationAndUser): ContactInfo? {
+        val composingUsers = conversationAndUser
+            .conversation
+            .otherComposingUsers
+
+        return if (conversationAndUser.conversation.isGroupChat && composingUsers.isNotEmpty()) {
+            val users = userRepository.getUsers(composingUsers)
+            ContactInfo.Composing(
+                UiText.PluralStringResource(
+                    R.plurals.composing,
+                    composingUsers.size,
+                    users.joinToString()
+                )
+            )
+        } else if (!conversationAndUser.conversation.isGroupChat && composingUsers.isNotEmpty()) {
+            ContactInfo.Composing(UiText.StringResource(R.string.composing))
+        } else {
+            conversationAndUser.conversation.lastMessage?.let { message ->
+                ContactInfo.LastMessage(
+                    text = UiText.DynamicString(message),
+                    read = conversationAndUser.conversation.unreadMessages == 0
                 )
             }
-        }.cachedIn(viewModelScope)
+        }
+    }
+
+    internal data class State(
+        val isConnected: Boolean = false,
+        val owner: String? = null
+    )
 
 }
+
+data class ConversationUiState(
+    val contacts: List<Contact> = listOf()
+)

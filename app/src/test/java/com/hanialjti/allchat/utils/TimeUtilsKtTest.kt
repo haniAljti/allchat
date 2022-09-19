@@ -3,9 +3,7 @@ package com.hanialjti.allchat.utils
 import org.junit.Assert.*
 
 import org.junit.Test
-import java.time.LocalDate
 import java.time.LocalDateTime
-import kotlin.reflect.typeOf
 
 class TimeUtilsKtTest {
 
@@ -47,7 +45,7 @@ class TimeUtilsKtTest {
         val yesterday = LocalDateTime.now().minusDays(1)
         val expected = UiDate.Yesterday(yesterday)
 
-        assertEquals(expected, yesterday.getDateText())
+        assertEquals(expected, yesterday.asUiDate())
     }
 
     @Test
@@ -55,7 +53,7 @@ class TimeUtilsKtTest {
         val today = LocalDateTime.now()
         val expected = UiDate.Today(today)
 
-        assertEquals(expected, today.getDateText())
+        assertEquals(expected, today.asUiDate())
     }
 
     @Test
@@ -63,7 +61,7 @@ class TimeUtilsKtTest {
         val lastMonth = LocalDateTime.now().minusMonths(1)
         val expected = UiDate.LastMonth(lastMonth)
 
-        assertEquals(expected, lastMonth.getDateText())
+        assertEquals(expected, lastMonth.asUiDate())
     }
 
     @Test
@@ -71,7 +69,7 @@ class TimeUtilsKtTest {
         val lastYear = LocalDateTime.now().minusYears(1)
         val expected = UiDate.LastYear(lastYear)
 
-        assertEquals(expected, lastYear.getDateText())
+        assertEquals(expected, lastYear.asUiDate())
     }
 
     @Test
@@ -79,6 +77,6 @@ class TimeUtilsKtTest {
         val twoYearsAgo = LocalDateTime.now().minusYears(2)
         val expected = UiDate.Other(twoYearsAgo)
 
-        assertEquals(expected, twoYearsAgo.getDateText())
+        assertEquals(expected, twoYearsAgo.asUiDate())
     }
 }

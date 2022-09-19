@@ -14,11 +14,11 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import com.hanialjti.allchat.R
-import com.hanialjti.allchat.models.UiAttachment
+import com.hanialjti.allchat.models.Attachment
 
 @Composable
 fun PdfFileAttachment(
-    pdf: UiAttachment.Pdf,
+    pdf: Attachment.Pdf,
     onPdfClicked: () -> Unit,
     modifier: Modifier
 ) {

@@ -5,9 +5,8 @@ import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.media.MediaPlayer
-import android.media.MediaRecorder
 import android.net.Uri
-import android.util.Log
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.DrawableRes
@@ -33,24 +32,25 @@ import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.navigation.NavHostController
+import androidx.paging.LoadState
 import androidx.paging.compose.LazyPagingItems
 import androidx.paging.compose.collectAsLazyPagingItems
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.PermissionStatus
 import com.google.accompanist.permissions.rememberPermissionState
+import com.hanialjti.allchat.CustomKoin
 import com.hanialjti.allchat.R
 import com.hanialjti.allchat.component.*
+import com.hanialjti.allchat.models.Attachment
 import com.hanialjti.allchat.models.ContactImage
-import com.hanialjti.allchat.models.UiAttachment
 import com.hanialjti.allchat.models.UiMessage
 import com.hanialjti.allchat.models.defaultAttachmentName
+import com.hanialjti.allchat.models.entity.Status
 import com.hanialjti.allchat.models.state.rememberMediaPlayerState
 import com.hanialjti.allchat.models.state.rememberMediaRecorderState
-import com.hanialjti.allchat.sdk26AndUp
 import com.hanialjti.allchat.ui.toImagePreviewScreen
 import com.hanialjti.allchat.utils.*
 import com.hanialjti.allchat.viewmodels.ChatViewModel
@@ -58,30 +58,57 @@ import com.hanialjti.allchat.viewmodels.defaultName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import org.koin.androidx.compose.getViewModel
+import org.koin.core.parameter.parametersOf
+import timber.log.Timber
 
 @OptIn(ExperimentalMaterialApi::class, ExperimentalPermissionsApi::class)
 @Composable
 fun ChatScreen(
     navController: NavHostController,
     contactId: String,
-    viewModel: ChatViewModel = hiltViewModel()
+    isGroupChat: Boolean,
+    viewModel: ChatViewModel = getViewModel(scope = CustomKoin.getScope(), parameters = { parametersOf(contactId, isGroupChat) })
 ) {
 
-    LaunchedEffect(Unit) { viewModel.setConversation(contactId, "user_1") }
+    LaunchedEffect(Unit) {
+        viewModel.initializeChat(
+            conversationId = contactId,
+            isGroupChat = isGroupChat
+        )
+    }
 
-    val messages =
-        remember(viewModel) { viewModel.getMessages(contactId) }.collectAsLazyPagingItems()
+    BackHandler(enabled = true) {
+        viewModel.setThisChatAsInactive()
+        navController.popBackStack()
+    }
+
     val uiState by remember(viewModel) { viewModel.uiState }.collectAsState()
+    val messages = remember(viewModel) { viewModel.messages }.collectAsLazyPagingItems()
+
+    LaunchedEffect(messages.loadState) {
+        if (
+            messages.loadState.prepend is LoadState.NotLoading &&
+            messages.loadState.refresh is LoadState.NotLoading
+        ) {
+            val lastMessage =
+                messages.itemSnapshotList.items.firstOrNull { it.from != uiState.owner }
+            lastMessage?.id?.let {
+                if (lastMessage.status != Status.Seen) {
+                    viewModel.markMessageAsDisplayed(it)
+                }
+            }
+            viewModel.resetUnreadCounter()
+        }
+    }
 
     val bottomSheetState =
         rememberModalBottomSheetState(initialValue = ModalBottomSheetValue.Hidden)
     val coroutine = rememberCoroutineScope()
     val context = LocalContext.current
     val lifecycleOwner by rememberUpdatedState(newValue = LocalLifecycleOwner.current)
-    val mediaPlayerState = rememberMediaPlayerState(mediaPlayer = MediaPlayer())
-    val mediaRecorderState =
-        rememberMediaRecorderState(mediaRecorder = sdk26AndUp { MediaRecorder(context) }
-            ?: MediaRecorder())
+    val mediaPlayerState = rememberMediaPlayerState()
+    val mediaRecorderState = rememberMediaRecorderState()
 
     val recordAudioPermissionState = rememberPermissionState(
         permission = Manifest.permission.RECORD_AUDIO
@@ -129,64 +156,65 @@ fun ChatScreen(
                         onMenuClicked = { /*TODO*/ }
                     )
 
-
-                    MessagesList(
-                        messages = messages,
-                        trackPositions = uiState.trackPositions,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .weight(1f),
-                        owner = "user_1",
-                        onResumeAudio = { recording ->
-                            mediaPlayerState.playMedia(
-                                recording,
-                                uiState.trackPositions[recording.cacheUri]
-                            )
-                            recording.cacheUri?.let { viewModel.updateTrackPosition(it, 0) }
-                        },
-                        onPauseAudio = { recording ->
-                            val stoppedAt = mediaPlayerState.pauseMedia()
-                            recording.cacheUri?.let {
-                                viewModel.updateTrackPosition(
-                                    it,
-                                    stoppedAt
+                    uiState.owner?.let {
+                        MessagesList(
+                            messages = messages,
+                            trackPositions = uiState.trackPositions,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .weight(1f),
+                            owner = it,
+                            onResumeAudio = { recording ->
+                                mediaPlayerState.playMedia(
+                                    recording,
+                                    uiState.trackPositions[recording.cacheUri]
                                 )
-                            }
-                        },
-                        onAudioSeekValueChanged = { recording, seekValue ->
-                            recording.cacheUri?.let {
-                                viewModel.updateTrackPosition(
-                                    it,
-                                    seekValue
-                                )
-                            }
-                        },
-                        onPdfClicked = { pdf ->
-                            val uri = Uri.parse(pdf.cacheUri)
-                            val openPdfIntent = Intent(Intent.ACTION_VIEW)
-                            openPdfIntent.setDataAndType(uri, "application/pdf")
-                            openPdfIntent.flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
+                                recording.cacheUri?.let { viewModel.updateTrackPosition(it, 0) }
+                            },
+                            onPauseAudio = { recording ->
+                                val stoppedAt = mediaPlayerState.pauseMedia()
+                                recording.cacheUri?.let {
+                                    viewModel.updateTrackPosition(
+                                        it,
+                                        stoppedAt
+                                    )
+                                }
+                            },
+                            onAudioSeekValueChanged = { recording, seekValue ->
+                                recording.cacheUri?.let {
+                                    viewModel.updateTrackPosition(
+                                        it,
+                                        seekValue
+                                    )
+                                }
+                            },
+                            onPdfClicked = { pdf ->
+                                val uri = Uri.parse(pdf.cacheUri)
+                                val openPdfIntent = Intent(Intent.ACTION_VIEW)
+                                openPdfIntent.setDataAndType(uri, "application/pdf")
+                                openPdfIntent.flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
 
-                            val chooserIntent = Intent
-                                .createChooser(
-                                    openPdfIntent,
-                                    context.getString(R.string.choose_pdf_title)
-                                )
+                                val chooserIntent = Intent
+                                    .createChooser(
+                                        openPdfIntent,
+                                        context.getString(R.string.choose_pdf_title)
+                                    )
 
-                            try {
-                                context.startActivity(chooserIntent)
-                            } catch (e: ActivityNotFoundException) {
-                                e.printStackTrace()
+                                try {
+                                    context.startActivity(chooserIntent)
+                                } catch (e: ActivityNotFoundException) {
+                                    e.printStackTrace()
+                                }
+                            },
+                            onImageClicked = { message ->
+                                navController.toImagePreviewScreen(message.id)
+                            },
+                            activeMessage = mediaPlayerState.activeRecording.value,
+                            onAttachmentDownloaded = { message, uri ->
+                                viewModel.saveMessageContentUri(message, uri)
                             }
-                        },
-                        onImageClicked = { message ->
-                            navController.toImagePreviewScreen(message.id)
-                        },
-                        activeMessage = mediaPlayerState.activeRecording.value,
-                        onAttachmentDownloaded = { message, uri ->
-                            viewModel.saveMessageContentUri(message, uri)
-                        }
-                    )
+                        )
+                    }
 
                 }
 
@@ -267,7 +295,7 @@ fun ChatScreen(
 @Composable
 fun Context.mediaPickerLauncher(
     coroutineScope: CoroutineScope,
-    onImageSelected: (UiAttachment.Image) -> Unit
+    onImageSelected: (Attachment.Image) -> Unit
 ) = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
 
     if (uri != null) {
@@ -275,7 +303,7 @@ fun Context.mediaPickerLauncher(
         coroutineScope.launch {
             val imageName = defaultAttachmentName
             val savedImageUri = saveImageToInternalStorage(uri, imageName)
-            val attachment = UiAttachment.Image(
+            val attachment = Attachment.Image(
                 null,
                 imageName,
                 savedImageUri.path,
@@ -287,16 +315,16 @@ fun Context.mediaPickerLauncher(
             onImageSelected(attachment)
         }
 
-        Log.d("PhotoPicker", "Selected URI: $uri")
+        Timber.d("Selected URI: $uri")
     } else {
-        Log.d("PhotoPicker", "No media selected")
+        Timber.d("No media selected")
     }
 }
 
 
 @Composable
 fun Context.openPdfDocumentLauncher(
-    onPdfAttachmentSelected: (UiAttachment.Pdf) -> Unit
+    onPdfAttachmentSelected: (Attachment.Pdf) -> Unit
 ) = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
 
     val cachedImageName = defaultAttachmentName
@@ -308,7 +336,7 @@ fun Context.openPdfDocumentLauncher(
         )
 
         onPdfAttachmentSelected(
-            UiAttachment.Pdf(
+            Attachment.Pdf(
                 null,
                 cachedImageName,
                 uri.path,
@@ -316,16 +344,16 @@ fun Context.openPdfDocumentLauncher(
             )
         )
 
-        Log.d("PhotoPicker", "Selected URI: $uri")
+        Timber.d("Selected URI: $uri")
     } else {
-        Log.d("PhotoPicker", "No media selected")
+        Timber.d("No media selected")
     }
 }
 
 @Composable
 fun Context.cameraLauncher(
     coroutineScope: CoroutineScope,
-    onImageTaken: (UiAttachment.Image) -> Unit
+    onImageTaken: (Attachment.Image) -> Unit
 ) = rememberLauncherForActivityResult(ActivityResultContracts.TakePicturePreview()) { bitmap ->
 
     val cachedImageName = defaultAttachmentName
@@ -333,7 +361,7 @@ fun Context.cameraLauncher(
         bitmap?.let {
             val uri = saveBitmapToInternalStorage(bitmap, cachedImageName)
             onImageTaken(
-                UiAttachment.Image(
+                Attachment.Image(
                     null,
                     cachedImageName,
                     uri.path,
@@ -354,26 +382,25 @@ fun MessagesList(
     trackPositions: Map<String, Int>,
     modifier: Modifier = Modifier,
     owner: String,
-    onAudioSeekValueChanged: (UiAttachment.Recording, Int) -> Unit,
-    onResumeAudio: (UiAttachment.Recording) -> Unit,
-    onPauseAudio: (UiAttachment.Recording) -> Unit,
-    onPdfClicked: (UiAttachment.Pdf) -> Unit,
+    onAudioSeekValueChanged: (Attachment.Recording, Int) -> Unit,
+    onResumeAudio: (Attachment.Recording) -> Unit,
+    onPauseAudio: (Attachment.Recording) -> Unit,
+    onPdfClicked: (Attachment.Pdf) -> Unit,
     onImageClicked: (UiMessage) -> Unit,
     onAttachmentDownloaded: (UiMessage, String) -> Unit,
-    activeMessage: UiAttachment.Recording?
+    activeMessage: Attachment.Recording?
 ) {
-
-    messages.loadState.append
 
     val coroutine = rememberCoroutineScope()
     val context = LocalContext.current
 
     val messageListState = rememberLazyListState()
 
-    LaunchedEffect(messages.loadState) {
-        if (messageListState.firstVisibleItemIndex < 10) {
-            messageListState.animateScrollToItem(0)
-        }
+    LaunchedEffect(messages.itemCount) {
+        if (messages.loadState.prepend is LoadState.NotLoading)
+            if (messageListState.firstVisibleItemIndex < 10) {
+                messageListState.animateScrollToItem(0)
+            }
     }
 
     LazyColumn(
@@ -393,7 +420,7 @@ fun MessagesList(
             LaunchedEffect(Unit) {
 
                 when (val attachment = currentMessage?.attachment) {
-                    is UiAttachment.Recording -> {
+                    is Attachment.Recording -> {
                         if (attachment.url != null && attachment.cacheUri == null) {
                             coroutine.launch {
                                 val uri = context.saveAttachmentToInternalStorage(attachment)
@@ -401,7 +428,7 @@ fun MessagesList(
                             }
                         }
                     }
-                    is UiAttachment.Pdf -> {
+                    is Attachment.Pdf -> {
                         if (attachment.url != null && attachment.cacheUri == null) {
                             coroutine.launch {
                                 val uri = context.saveAttachmentToInternalStorage(attachment)
@@ -421,15 +448,15 @@ fun MessagesList(
                             currentMessage = currentMessage
                         )
                     )
-                    .animateItemPlacement(
-
-                    )
+                    .animateItemPlacement()
             ) {
 
-                val lastTrackPosition = if (currentMessage?.attachment is UiAttachment.Recording)
+                val lastTrackPosition = if (currentMessage?.attachment is Attachment.Recording)
                     trackPositions[currentMessage.attachment.cacheUri] else 0
 
-                if (currentMessage == null) PlaceHolderMessage()
+                if (currentMessage == null) {
+                    PlaceHolderMessage()
+                }
                 else {
                     if (owner == currentMessage.from) {
                         SentMessage(
@@ -437,13 +464,13 @@ fun MessagesList(
                             lastMessageFromSameSender = lastMessage?.from == currentMessage.from,
                             onAudioSeekValueChanged = {
                                 onAudioSeekValueChanged(
-                                    currentMessage.attachment as UiAttachment.Recording,
+                                    currentMessage.attachment as Attachment.Recording,
                                     it
                                 )
                             },
-                            onPauseAudio = { onPauseAudio(currentMessage.attachment as UiAttachment.Recording) },
-                            onResumeAudio = { onResumeAudio(currentMessage.attachment as UiAttachment.Recording) },
-                            onPdfClicked = { onPdfClicked(currentMessage.attachment as UiAttachment.Pdf) },
+                            onPauseAudio = { onPauseAudio(currentMessage.attachment as Attachment.Recording) },
+                            onResumeAudio = { onResumeAudio(currentMessage.attachment as Attachment.Recording) },
+                            onPdfClicked = { onPdfClicked(currentMessage.attachment as Attachment.Pdf) },
                             onImageClicked = { onImageClicked(currentMessage) },
                             isActiveMessage = activeMessage == currentMessage.attachment,
                             lastTrackPosition = lastTrackPosition ?: 0
@@ -454,13 +481,13 @@ fun MessagesList(
                             lastMessageFromSameSender = lastMessage?.from == currentMessage.from,
                             onAudioSeekValueChanged = {
                                 onAudioSeekValueChanged(
-                                    currentMessage.attachment as UiAttachment.Recording,
+                                    currentMessage.attachment as Attachment.Recording,
                                     it
                                 )
                             },
-                            onPauseAudio = { onPauseAudio(currentMessage.attachment as UiAttachment.Recording) },
-                            onResumeAudio = { onResumeAudio(currentMessage.attachment as UiAttachment.Recording) },
-                            onPdfClicked = { onPdfClicked(currentMessage.attachment as UiAttachment.Pdf) },
+                            onPauseAudio = { onPauseAudio(currentMessage.attachment as Attachment.Recording) },
+                            onResumeAudio = { onResumeAudio(currentMessage.attachment as Attachment.Recording) },
+                            onPdfClicked = { onPdfClicked(currentMessage.attachment as Attachment.Pdf) },
                             onImageClicked = { onImageClicked(currentMessage) },
                             isActiveMessage = activeMessage == currentMessage.attachment,
                             lastTrackPosition = lastTrackPosition ?: 0
@@ -475,7 +502,7 @@ fun MessagesList(
                 )
             ) {
                 val currentMessageDateText =
-                    currentMessage.timestamp.asLocalDateTime().getDateText()
+                    currentMessage.timestamp.asLocalDateTime().asUiDate()
 
                 Box(
                     modifier = Modifier
@@ -484,7 +511,7 @@ fun MessagesList(
                 ) {
                     Text(
                         text = currentMessageDateText.asSeparator(),
-                        color = Color.White,
+                        color = MaterialTheme.colors.primary,
                         modifier = Modifier,
                         fontSize = 16.sp
                     )
@@ -527,7 +554,7 @@ fun ChatTopBar(
                     Icon(
                         painter = painterResource(id = R.drawable.ic_back),
                         contentDescription = null,
-                        tint = Color.White
+                        tint = MaterialTheme.colors.primary
                     )
                 }
 
@@ -539,9 +566,15 @@ fun ChatTopBar(
                         .padding(start = 5.dp)
                         .clickable { onPersonClicked() },
                 ) {
-                    Text(text = name ?: defaultName, color = Color.White)
+                    Text(text = name ?: defaultName, color = MaterialTheme.colors.primary)
                     AnimatedVisibility(visible = status != null) {
-                        status?.let { Text(text = it, color = Color.White, fontSize = 14.sp) }
+                        status?.let {
+                            Text(
+                                text = it,
+                                color = MaterialTheme.colors.primary,
+                                fontSize = 14.sp
+                            )
+                        }
                     }
                 }
 
@@ -550,7 +583,7 @@ fun ChatTopBar(
                         painter = painterResource(id = R.drawable.ic_menu),
                         contentDescription = null,
                         modifier = Modifier.padding(20.dp),
-                        tint = Color.White
+                        tint = MaterialTheme.colors.primary
                     )
                 }
             }
@@ -558,7 +591,7 @@ fun ChatTopBar(
                 modifier = Modifier
                     .height(2.dp)
                     .fillMaxWidth()
-                    .background(Color.White)
+                    .background(MaterialTheme.colors.primary)
             )
         }
 
@@ -570,7 +603,7 @@ fun ChatTopBar(
 fun MessageTime(timestamp: Long, modifier: Modifier = Modifier) {
     Text(
         text = timestamp.formatTimestamp(TWO_DIGIT_FORMAT),
-        color = Color.White,
+        color = MaterialTheme.colors.primary,
         modifier = modifier
     )
 }
@@ -593,7 +626,3 @@ fun AudioPlayBackButton(
         )
     }
 }
-
-
-
-

@@ -13,11 +13,11 @@ import androidx.compose.ui.unit.dp
 import coil.compose.rememberAsyncImagePainter
 import coil.request.ImageRequest
 import com.hanialjti.allchat.R
-import com.hanialjti.allchat.models.UiAttachment
+import com.hanialjti.allchat.models.Attachment
 
 @Composable
 fun ImageAttachment(
-    image: UiAttachment.Image,
+    image: Attachment.Image,
     onImageClicked: () -> Unit,
     modifier: Modifier = Modifier
 ) {

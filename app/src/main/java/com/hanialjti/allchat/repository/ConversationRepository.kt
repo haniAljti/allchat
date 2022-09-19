@@ -1,32 +1,103 @@
 package com.hanialjti.allchat.repository
 
-import androidx.paging.Pager
-import androidx.paging.PagingConfig
-import com.hanialjti.allchat.R
+import androidx.room.withTransaction
 import com.hanialjti.allchat.localdatabase.AllChatLocalRoomDatabase
-import com.hanialjti.allchat.models.Contact
-import com.hanialjti.allchat.models.ContactInfo
-import com.hanialjti.allchat.models.UiText
-import kotlinx.coroutines.flow.map
-import javax.inject.Inject
-import javax.inject.Singleton
+import com.hanialjti.allchat.models.ConversationAndUser
+import com.hanialjti.allchat.models.ListChange
+import com.hanialjti.allchat.models.entity.Conversation
+import com.hanialjti.allchat.models.entity.User
+import com.hanialjti.allchat.viewmodels.defaultName
+import com.hanialjti.allchat.xmpp.XmppConnectionHelper
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import timber.log.Timber
 
-@Singleton
-class ConversationRepository @Inject constructor(
-    localDb: AllChatLocalRoomDatabase
+class ConversationRepository constructor(
+    private val localDb: AllChatLocalRoomDatabase,
+    private val remoteDb: XmppConnectionHelper
 ) {
 
     private val conversationDao = localDb.conversationDao()
+    private val userDao = localDb.userDao()
 
-    fun conversations(owner: String) = Pager(
-        config = PagingConfig(
-            pageSize = 20,
-            enablePlaceholders = true
-        ),
-        pagingSourceFactory = {
-            conversationDao.getConversationsAndUsers(owner)
+    fun conversations(owner: String) =
+        conversationDao.getConversationsAndUsers(owner)
+
+    fun conversation(conversationId: String) =
+        conversationDao.getConversationAndUser(conversationId)
+
+    suspend fun resetUnreadCounter(conversationId: String) {
+        conversationDao.resetUnreadCounter(conversationId)
+    }
+
+    suspend fun insertConversationAndUser(conversationAndUser: ConversationAndUser) =
+        withContext(Dispatchers.IO) {
+            localDb.withTransaction {
+                conversationDao.upsert(conversationAndUser.conversation)
+                conversationAndUser.user?.let { user -> userDao.upsert(user) }
+            }
+            conversationAndUser.conversation.from?.let {
+                startConversation(
+                    conversationAndUser.conversation.id,
+                    conversationAndUser.name,
+                    conversationAndUser.conversation.isGroupChat,
+                    it
+                )
+            }
         }
-    ).flow
 
-    fun conversation(conversationId: String) = conversationDao.getConversationAndUser(conversationId)
+    suspend fun loadAllContacts(owner: String) {
+        remoteDb.retrieveContacts(owner)
+            .forEach {
+                insertConversationAndUser(it)
+            }
+    }
+
+    private suspend fun startConversation(
+        conversationId: String,
+        name: String?,
+        isGroupChat: Boolean,
+        myId: String
+    ) = withContext(Dispatchers.IO) {
+
+        val conversation = Conversation(
+            id = conversationId,
+            isGroupChat = isGroupChat,
+            name = name,
+            from = myId,
+            to = if (!isGroupChat) conversationId else null
+        )
+
+        conversationDao.insert(conversation)
+
+        // TODO: Do this in a worker
+        remoteDb.startConversation(
+            conversationId,
+            name ?: defaultName,
+            myId
+        )
+    }
+
+    suspend fun listenForConversationUpdates() {
+        remoteDb.listenForRosterChanges()
+            .collect { rosterChange ->
+                Timber.d("New Change to the roster")
+                when (rosterChange) {
+                    is ListChange.ItemAdded -> {
+                        if (rosterChange.item is Conversation) {
+                            Timber.d("New Contact")
+                            val conversation = rosterChange.item
+                            conversationDao.insert(conversation)
+                        }
+                    }
+                    is ListChange.ItemUpdated -> {
+                        if (rosterChange.item is User) {
+                            Timber.d("User data change")
+                            val user = rosterChange.item
+                            userDao.updateUserPresence(user.isOnline)
+                        }
+                    }
+                }
+            }
+    }
 }

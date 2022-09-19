@@ -10,130 +10,119 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.FloatingActionButton
+import androidx.compose.material.Icon
+import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Text
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Alignment.Companion.BottomEnd
 import androidx.compose.ui.Alignment.Companion.Center
 import androidx.compose.ui.Alignment.Companion.CenterHorizontally
 import androidx.compose.ui.Alignment.Companion.CenterVertically
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
-import androidx.paging.compose.LazyPagingItems
-import androidx.paging.compose.collectAsLazyPagingItems
+import com.hanialjti.allchat.CustomKoin
 import com.hanialjti.allchat.models.Contact
+import com.hanialjti.allchat.models.ContactInfo
 import com.hanialjti.allchat.ui.theme.Green
+import com.hanialjti.allchat.ui.toAddNewContactScreen
 import com.hanialjti.allchat.ui.toChatScreen
+import com.hanialjti.allchat.ui.toEditUserInfoScreen
 import com.hanialjti.allchat.utils.TWO_DIGIT_FORMAT
 import com.hanialjti.allchat.utils.formatTimestamp
 import com.hanialjti.allchat.viewmodels.ConversationsViewModel
+import org.koin.androidx.compose.getViewModel
+import timber.log.Timber
 
 @Composable
 fun ConversationsScreen(
     navController: NavHostController,
-    viewModel: ConversationsViewModel = hiltViewModel()
+    viewModel: ConversationsViewModel = getViewModel(scope = CustomKoin.getScope())
 ) {
-    val conversations = remember(viewModel) { viewModel.conversations("user_1") }
-        .collectAsLazyPagingItems()
 
-    Column(horizontalAlignment = CenterHorizontally) {
-        Text(
-            text = "Conversations",
-            fontWeight = FontWeight.Bold,
-            color = Color.White,
-            fontSize = 20.sp,
-            modifier = Modifier.padding(20.dp)
-        )
+    val uiState by remember(viewModel) {
+        viewModel.uiState
+    }.collectAsState()
 
-        ConversationList(
-            title = "Conversations",
-            conversations = conversations
-        ) { conversation ->
-            navController.toChatScreen(conversation.id)
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column {
+            Text(
+                text = "Chats",
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colors.primary,
+                fontSize = 36.sp,
+                modifier = Modifier
+                    .padding(top = 25.dp, bottom = 25.dp, start = 36.dp)
+                    .clickable {
+                        navController.toEditUserInfoScreen()
+                    }
+            )
+
+            Spacer(
+                modifier = Modifier
+                    .height(2.dp)
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+                    .alpha(0.2f)
+                    .background(MaterialTheme.colors.primary)
+            )
+
+            ConversationList(
+                conversations = uiState.contacts
+            ) { conversation ->
+                Timber.d(conversation.id)
+                navController.toChatScreen(conversation.id, conversation.isGroupChat)
+            }
+
+        }
+
+        FloatingActionButton(
+            onClick = { navController.toAddNewContactScreen() },
+            modifier = Modifier
+                .align(BottomEnd)
+                .padding(20.dp)
+                .size(70.dp)
+        ) {
+            Icon(imageVector = Icons.Default.Add, contentDescription = null)
         }
     }
-
 }
-
-//@Preview
-//@Composable
-//fun PreviewConversationList() {
-//    listOf(
-//        Conversation(
-//            id = "",
-//            lastMessage = "Hello",
-//            isGroupChat = false,
-//            name = "Omar Alnaib",
-//            imageUrl = "",
-//            from = "",
-//            unreadMessages = 3,
-//            lastUpdated = currentTimestamp
-//        ),
-//        Conversation(
-//            id = "",
-//            lastMessage = "Hello",
-//            isGroupChat = false,
-//            name = "Hani Alalajati",
-//            imageUrl = "",
-//            from = "",
-//            unreadMessages = 100,
-//            lastUpdated = currentTimestamp
-//        )
-//    ).apply {
-//        ConversationList(title = "Conversations", conversations = this) { }
-//    }
-//}
-
-//@Preview
-//@Composable
-//fun PreviewConversationItem() {
-//    Conversation(
-//        id = "",
-//        lastMessage = "Hello",
-//        isGroupChat = false,
-//        name = "Omar Alnaib",
-//        imageUrl = "",
-//        from = "",
-//        unreadMessages = 3,
-//        lastUpdated = currentTimestamp
-//    ).apply {
-//        ConversationItem(this) {}
-//    }
-//
-//}
 
 @Composable
 fun ConversationList(
-    title: String,
-    conversations: LazyPagingItems<Contact>,
+    conversations: List<Contact>,
     onConversationClicked: (Contact) -> Unit
 ) {
 
-
-
     LazyColumn(
         horizontalAlignment = CenterHorizontally,
+        contentPadding = PaddingValues(bottom = 80.dp)
     ) {
         items(
-            count = conversations.itemCount,
-            key = { conversations[it]?.id ?: it }
+            count = conversations.size,
+            key = { conversations[it].id }
         ) { index ->
 
             val conversation = conversations[index]
 
-            conversation?.let {
-                ConversationItem(contact = conversation) {
-                    onConversationClicked(it)
-                }
-            } ?: PlaceholderConversation()
+            ConversationItem(
+                modifier = Modifier.animateItemPlacement(),
+                contact = conversation
+            ) {
+                onConversationClicked(conversation)
+            }
 
         }
 
@@ -142,18 +131,22 @@ fun ConversationList(
 
 @OptIn(ExperimentalAnimationApi::class)
 @Composable
-fun ConversationItem(contact: Contact, onConversationClicked: () -> Unit) {
+fun ConversationItem(
+    contact: Contact,
+    modifier: Modifier = Modifier,
+    onConversationClicked: () -> Unit
+) {
     Row(
-        modifier = Modifier
+        modifier = modifier
             .clickable { onConversationClicked() }
-            .padding(15.dp)
+            .padding(horizontal = 36.dp, vertical = 12.dp)
             .fillMaxWidth(),
         verticalAlignment = CenterVertically
     ) {
 
         Box(modifier = Modifier) {
 
-            contact.image?.AsImage(modifier = Modifier.size(70.dp))
+            contact.image?.AsImage(modifier = Modifier.size(60.dp))
 
             androidx.compose.animation.AnimatedVisibility(
                 visible = contact.isOnline,
@@ -165,7 +158,7 @@ fun ConversationItem(contact: Contact, onConversationClicked: () -> Unit) {
                     modifier = Modifier
                         .size(24.dp)
                         .clip(CircleShape)
-                        .border(3.dp, Color.White, CircleShape)
+                        .border(3.dp, MaterialTheme.colors.primary, CircleShape)
                         .background(Green)
                 )
             }
@@ -181,41 +174,33 @@ fun ConversationItem(contact: Contact, onConversationClicked: () -> Unit) {
             contact.name?.let {
                 Text(
                     text = it,
-                    color = Color.White,
+                    color = MaterialTheme.colors.primary,
                     fontWeight = FontWeight.Bold
                 )
             }
 
-            if (contact.composing.isNotEmpty()) {
-                //TODO: format composing message
-                Text(
-                    text = "composing",
-                    color = Color.White,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
+            contact.content?.let {
+                ConversationContentText(
+                    text = it.text.asString(),
+                    color = MaterialTheme.colors.primary,
+                    fontWeight = if (it is ContactInfo.LastMessage && !it.read) FontWeight.Bold else FontWeight.Normal
                 )
-            } else {
-                contact.content?.let {
-                    Text(
-                        text = it.text.asString(),
-                        color = it.color,
-                        fontWeight = if (it.bold) FontWeight.Bold else FontWeight.Normal,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
             }
+
         }
 
         Column(
             horizontalAlignment = CenterHorizontally,
             modifier = Modifier.padding(end = 10.dp)
         ) {
-            Text(
-                text = contact.lastUpdated.formatTimestamp(TWO_DIGIT_FORMAT),
-                color = Color.White,
-                modifier = Modifier
-            )
+
+            contact.lastUpdated?.let { lastUpdated ->
+                Text(
+                    text = lastUpdated.formatTimestamp(TWO_DIGIT_FORMAT),
+                    color = MaterialTheme.colors.primary,
+                    modifier = Modifier
+                )
+            }
 
             if (contact.unreadMessages > 0) {
                 Box(
@@ -238,6 +223,22 @@ fun ConversationItem(contact: Contact, onConversationClicked: () -> Unit) {
             }
         }
     }
+}
+
+@Composable
+fun ConversationContentText(
+    modifier: Modifier = Modifier,
+    text: String,
+    color: Color,
+    fontWeight: FontWeight
+) {
+    Text(
+        text = text,
+        color = color,
+        fontWeight = fontWeight,
+        maxLines = 2,
+        overflow = TextOverflow.Ellipsis
+    )
 }
 
 @Composable
@@ -266,26 +267,3 @@ fun PlaceholderConversation() {
 
     }
 }
-
-//@Composable
-//fun ContactImage(modifier: Modifier = Modifier, painter: Painter, image: String) {
-//    Image(
-//        painter = painter,
-//        contentDescription = null,
-//        modifier = modifier
-//            .clip(CircleShape),
-//        contentScale = ContentScale.Crop
-//    )
-//}
-//
-//@Composable
-//fun DefaultContactImage(modifier: Modifier = Modifier, isGroupChat: Boolean) {
-//    Image(
-//        painter = painterResource(id = if (isGroupChat) R.drawable.ic_group else R.drawable.ic_user),
-//        contentDescription = null,
-//        colorFilter = ColorFilter.tint(Color.White),
-//        modifier = modifier
-//            .border(width = 3.dp, color = Color.White, shape = CircleShape)
-//            .clip(CircleShape)
-//    )
-//}

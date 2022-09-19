@@ -3,24 +3,25 @@ package com.hanialjti.allchat.models.state
 import android.media.MediaPlayer
 import android.util.Log
 import androidx.compose.runtime.*
-import com.hanialjti.allchat.models.UiAttachment
-import com.hanialjti.allchat.models.UiMessage
+import com.hanialjti.allchat.models.Attachment
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import timber.log.Timber
 
 @Stable
 class MediaPlayerState(
     private var mediaPlayer: MediaPlayer?,
     private val coroutine: CoroutineScope,
-    val activeRecording: MutableState<UiAttachment.Recording?>,
+    val activeRecording: MutableState<Attachment.Recording?>,
 ) {
 
-    init {
-        mediaPlayer?.apply {
-            setOnSeekCompleteListener {
-                Log.d("OnSeekCompleteListener", "called")
-                it.start()
+    private fun initializePlayer() {
+        if (mediaPlayer == null) {
+            mediaPlayer = MediaPlayer().apply {
+                setOnSeekCompleteListener {
+                    it.start()
+                }
             }
         }
     }
@@ -55,7 +56,10 @@ class MediaPlayerState(
         }
     }
 
-    fun playMedia(recording: UiAttachment.Recording, trackPosition: Int?) {
+    fun playMedia(recording: Attachment.Recording, trackPosition: Int?) {
+
+        initializePlayer()
+
         coroutine.launch(Dispatchers.IO) {
             try {
 
@@ -84,7 +88,7 @@ class MediaPlayerState(
 
 @Composable
 fun rememberMediaPlayerState(
-    mediaPlayer: MediaPlayer?,
+    mediaPlayer: MediaPlayer? = null,
     coroutine: CoroutineScope = rememberCoroutineScope()
 ): MediaPlayerState = remember {
     MediaPlayerState(

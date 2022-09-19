@@ -3,13 +3,12 @@ package com.hanialjti.allchat.component
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.hanialjti.allchat.models.UiMessage
@@ -34,10 +33,13 @@ fun SentMessage(
         verticalAlignment = Alignment.Bottom,
         modifier = modifier
     ) {
-        MessageTime(
-            timestamp = message.timestamp,
-            modifier = Modifier.padding(horizontal = 20.dp)
-        )
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            MessageTime(
+                timestamp = message.timestamp,
+                modifier = Modifier.padding(horizontal = 20.dp)
+            )
+            message.status?.name?.let { Text(text = it, color = MaterialTheme.colors.primary) }
+        }
 
         Column(
             modifier = Modifier

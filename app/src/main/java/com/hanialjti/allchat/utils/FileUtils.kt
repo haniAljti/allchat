@@ -8,7 +8,7 @@ import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import com.hanialjti.allchat.exception.NotSupportedException
-import com.hanialjti.allchat.models.UiAttachment
+import com.hanialjti.allchat.models.Attachment
 import com.hanialjti.allchat.models.entity.Media
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -62,10 +62,10 @@ suspend fun Context.saveImageToInternalStorage(uri: Uri, name: String): Uri = wi
     }
 }
 
-suspend fun Context.saveAttachmentToInternalStorage(attachment: UiAttachment): Uri = withContext(Dispatchers.IO) {
+suspend fun Context.saveAttachmentToInternalStorage(attachment: Attachment): Uri = withContext(Dispatchers.IO) {
     return@withContext try {
 
-        val downloadableAttachment = attachment.toDownloadableAttachment()
+        val downloadableAttachment = attachment.asDownloadableAttachment()
 
         val attachmentFile = File(cacheDir, downloadableAttachment.name + downloadableAttachment.extension)
         val fileOutputStream = FileOutputStream(attachmentFile)

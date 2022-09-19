@@ -9,9 +9,10 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalContext
-import com.hanialjti.allchat.models.UiAttachment
+import com.hanialjti.allchat.models.Attachment
 import com.hanialjti.allchat.models.defaultAttachmentName
 import com.hanialjti.allchat.models.entity.Media
+import com.hanialjti.allchat.sdk26AndUp
 import com.hanialjti.allchat.utils.createFileInInternalStorage
 import com.hanialjti.allchat.utils.currentTimestamp
 import kotlinx.coroutines.CoroutineScope
@@ -23,13 +24,21 @@ import java.io.IOException
 
 @Stable
 class MediaRecorderState(
-    private var mediaRecorder: MediaRecorder?,
+    private var mediaRecorder: MediaRecorder? = null,
     private val coroutine: CoroutineScope,
     private val context: Context,
 ) {
     private var mediaOutputFile: File? = null
 
+    private fun initialRecorder() {
+        if (mediaRecorder == null) {
+            mediaRecorder = sdk26AndUp { MediaRecorder(context) }
+                ?: MediaRecorder()
+        }
+    }
+
     fun startRecording() {
+        initialRecorder()
         coroutine.launch(Dispatchers.IO) {
             mediaOutputFile = context.createFileInInternalStorage(
                 "AC_$currentTimestamp",
@@ -69,7 +78,7 @@ class MediaRecorderState(
     }
 
     @Throws(IOException::class)
-    suspend fun stopRecording(): UiAttachment.Recording = withContext(Dispatchers.IO) {
+    suspend fun stopRecording(): Attachment.Recording = withContext(Dispatchers.IO) {
 
         try {
             mediaRecorder?.stop()
@@ -111,7 +120,7 @@ class MediaRecorderState(
 
         mediaOutputFile = null
 
-        return@withContext UiAttachment.Recording(
+        return@withContext Attachment.Recording(
             url = null,
             name = mediaOutputFile?.name ?: defaultAttachmentName,
             cacheUri = Uri.fromFile(copy).path,
@@ -134,7 +143,7 @@ class MediaRecorderState(
 
 @Composable
 fun rememberMediaRecorderState(
-    mediaRecorder: MediaRecorder? = MediaRecorder(),
+    mediaRecorder: MediaRecorder? = null,
     coroutine: CoroutineScope = rememberCoroutineScope(),
     context: Context = LocalContext.current
 ): MediaRecorderState = remember {

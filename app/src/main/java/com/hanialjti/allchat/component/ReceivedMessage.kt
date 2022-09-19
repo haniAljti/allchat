@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -83,10 +84,15 @@ fun ReceivedMessage(
             }
 
         }
-        MessageTime(
-            timestamp = message.timestamp,
-            modifier = Modifier.padding(horizontal = 20.dp)
-        )
+
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            MessageTime(
+                timestamp = message.timestamp,
+                modifier = Modifier.padding(horizontal = 20.dp)
+            )
+            message.status?.name?.let { Text(text = it, color = MaterialTheme.colors.primary) }
+        }
+
     }
 
 }

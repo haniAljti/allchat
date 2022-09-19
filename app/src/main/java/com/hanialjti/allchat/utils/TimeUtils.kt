@@ -75,7 +75,7 @@ fun shouldDisplayDateSeparator(
 ) = lastDate == null || !lastDate.isEqual(currentDate)
 
 
-fun LocalDateTime.getDateText(): UiDate {
+fun LocalDateTime.asUiDate(): UiDate {
     val currentDate = LocalDate.now()
     val localDate = toLocalDate()
 

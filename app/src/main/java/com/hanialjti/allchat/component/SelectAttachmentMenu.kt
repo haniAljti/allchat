@@ -72,11 +72,15 @@ fun AttachmentMenu(
     }
 }
 
-sealed class AttachmentMenuOption(@StringRes override val name: Int, override val icon: Int) :
+sealed class AttachmentMenuOption(
+    @StringRes override val name: Int,
+    override val icon: Int
+) :
     MenuOption(name, icon) {
     object OpenGallery : MenuOption(R.string.open_gallery, R.drawable.ic_gallery)
     object OpenCamera : MenuOption(R.string.open_camera, R.drawable.ic_camera)
     object SelectPdfFile : MenuOption(R.string.choose_pdf, R.drawable.ic_filepdf)
+
 }
 
 val attachmentMenuOptions = listOf(
