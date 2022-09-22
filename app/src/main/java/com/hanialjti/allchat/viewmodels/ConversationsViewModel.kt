@@ -8,13 +8,14 @@ import com.hanialjti.allchat.datastore.UserPreferencesManager
 import com.hanialjti.allchat.models.*
 import com.hanialjti.allchat.repository.ConversationRepository
 import com.hanialjti.allchat.repository.UserRepository
+import com.hanialjti.allchat.repository.XmppChatRepository
 import com.hanialjti.allchat.utils.getDefaultDrawableRes
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
-import timber.log.Timber
 
 class ConversationsViewModel constructor(
     private val conversationRepository: ConversationRepository,
+    private val chatRepository: XmppChatRepository,
     private val userRepository: UserRepository,
     private val userPreferencesManager: UserPreferencesManager,
     private val connectionManager: ConnectionManager
@@ -23,17 +24,17 @@ class ConversationsViewModel constructor(
     private val _uiState = MutableStateFlow(ConversationUiState())
     val uiState: StateFlow<ConversationUiState> get() = _uiState
 
+    private val connectionState = connectionManager.observeConnectivityStatus()
+        .combine(userPreferencesManager.username) { connectionStatus, username ->
+            State(
+                isConnected = connectionStatus == ConnectionManager.Status.Connected,
+                owner = username
+            )
+        }
+
     init {
         viewModelScope.launch {
-            connectionManager
-                .observeConnectivityStatus()
-                .combine(userPreferencesManager.username) { connectionStatus, username ->
-                    Timber.d("Xmpp status: ${connectionStatus.name}")
-                    State(
-                        isConnected = connectionStatus == ConnectionManager.Status.Connected,
-                        owner = username
-                    )
-                }
+            connectionState
                 .collectLatest {
                     if (it.isConnected && it.owner != null) {
                         conversationRepository.loadAllContacts(it.owner)
@@ -45,6 +46,15 @@ class ConversationsViewModel constructor(
                 .collectLatest {
                     it?.let { username ->
                         conversations(username)
+                    }
+                }
+        }
+
+        viewModelScope.launch {
+            connectionState
+                .collectLatest {
+                    if (it.isConnected && it.owner != null) {
+                        chatRepository.syncMessages(it.owner)
                     }
                 }
         }

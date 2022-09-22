@@ -11,12 +11,9 @@ import com.google.accompanist.navigation.material.BottomSheetNavigator
 import com.google.accompanist.navigation.material.ExperimentalMaterialNavigationApi
 import com.google.accompanist.navigation.material.ModalBottomSheetLayout
 import com.google.accompanist.navigation.material.bottomSheet
-import com.hanialjti.allchat.CustomKoin
-import com.hanialjti.allchat.datastore.UserPreferencesManager
 import com.hanialjti.allchat.models.UserCredentials
 import com.hanialjti.allchat.ui.screens.*
-import org.koin.androidx.compose.getViewModel
-import org.koin.core.component.get
+import com.hanialjti.allchat.getViewModel
 
 @OptIn(ExperimentalMaterialNavigationApi::class)
 @Composable
@@ -78,11 +75,11 @@ fun NavigationLayout(
             composable(
                 route = Screen.ImagePreview.route,
                 arguments = listOf(
-                    navArgument("messageId") { type = NavType.StringType },
+                    navArgument("messageId") { type = NavType.IntType },
                     navArgument("enableInput") { type = NavType.BoolType }
                 )
             ) { backStackEntry ->
-                backStackEntry.arguments?.getString("messageId")?.let { messageId ->
+                backStackEntry.arguments?.getInt("messageId")?.let { messageId ->
                     navController.previousBackStackEntry?.let {
                         ImagePreviewScreen(
                             messageId = messageId,
@@ -90,7 +87,6 @@ fun NavigationLayout(
                                 ?: false,
                             navController = navController,
                             viewModel = getViewModel(
-                                scope = CustomKoin.getScope(),
                                 owner = it,
                             )
                         )
@@ -116,10 +112,10 @@ fun NavController.toEditUserInfoScreen() {
     navigate(Screen.EditUserInfo.route)
 }
 
-fun NavController.toImagePreviewScreen(messageId: String, enableInput: Boolean = false) {
+fun NavController.toImagePreviewScreen(messageId: Int, enableInput: Boolean = false) {
     navigate(
         Screen.ImagePreview.route
-            .replace("{messageId}", messageId)
+            .replace("{messageId}", messageId.toString())
             .replace("{enableInput}", enableInput.toString())
     )
 }

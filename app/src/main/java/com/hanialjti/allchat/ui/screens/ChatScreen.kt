@@ -4,7 +4,6 @@ import android.Manifest
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
-import android.media.MediaPlayer
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -41,7 +40,6 @@ import androidx.paging.compose.collectAsLazyPagingItems
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.PermissionStatus
 import com.google.accompanist.permissions.rememberPermissionState
-import com.hanialjti.allchat.CustomKoin
 import com.hanialjti.allchat.R
 import com.hanialjti.allchat.component.*
 import com.hanialjti.allchat.models.Attachment
@@ -58,9 +56,10 @@ import com.hanialjti.allchat.viewmodels.defaultName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import org.koin.androidx.compose.getViewModel
+import com.hanialjti.allchat.getViewModel
 import org.koin.core.parameter.parametersOf
 import timber.log.Timber
+
 
 @OptIn(ExperimentalMaterialApi::class, ExperimentalPermissionsApi::class)
 @Composable
@@ -68,7 +67,7 @@ fun ChatScreen(
     navController: NavHostController,
     contactId: String,
     isGroupChat: Boolean,
-    viewModel: ChatViewModel = getViewModel(scope = CustomKoin.getScope(), parameters = { parametersOf(contactId, isGroupChat) })
+    viewModel: ChatViewModel = getViewModel(parameters = { parametersOf(contactId, isGroupChat) })
 ) {
 
     LaunchedEffect(Unit) {
@@ -86,21 +85,20 @@ fun ChatScreen(
     val uiState by remember(viewModel) { viewModel.uiState }.collectAsState()
     val messages = remember(viewModel) { viewModel.messages }.collectAsLazyPagingItems()
 
-    LaunchedEffect(messages.loadState) {
-        if (
-            messages.loadState.prepend is LoadState.NotLoading &&
-            messages.loadState.refresh is LoadState.NotLoading
-        ) {
-            val lastMessage =
-                messages.itemSnapshotList.items.firstOrNull { it.from != uiState.owner }
-            lastMessage?.id?.let {
-                if (lastMessage.status != Status.Seen) {
-                    viewModel.markMessageAsDisplayed(it)
-                }
-            }
-            viewModel.resetUnreadCounter()
-        }
-    }
+//    LaunchedEffect(messages) {
+//        if (
+//            messages.loadState.prepend is LoadState.NotLoading &&
+//            messages.loadState.refresh is LoadState.NotLoading
+//        ) {
+//            val lastMessage =
+//                messages.itemSnapshotList.items.firstOrNull { it.from != uiState.owner }
+//            lastMessage?.id?.let {
+//                if (lastMessage.status != Status.Seen) {
+//                    viewModel.markMessageAsDisplayed(it)
+//                }
+//            }
+//        }
+//    }
 
     val bottomSheetState =
         rememberModalBottomSheetState(initialValue = ModalBottomSheetValue.Hidden)
@@ -156,14 +154,14 @@ fun ChatScreen(
                         onMenuClicked = { /*TODO*/ }
                     )
 
-                    uiState.owner?.let {
+                    uiState.owner?.let { owner ->
                         MessagesList(
                             messages = messages,
                             trackPositions = uiState.trackPositions,
                             modifier = Modifier
                                 .fillMaxSize()
                                 .weight(1f),
-                            owner = it,
+                            owner = owner,
                             onResumeAudio = { recording ->
                                 mediaPlayerState.playMedia(
                                     recording,
@@ -410,6 +408,9 @@ fun MessagesList(
         horizontalAlignment = Alignment.CenterHorizontally,
         state = messageListState
     ) {
+
+
+
         items(
             count = messages.itemCount,
             key = { messages[it]?.id ?: it }
@@ -516,6 +517,12 @@ fun MessagesList(
                         fontSize = 16.sp
                     )
                 }
+            }
+        }
+
+        if (messages.loadState.append is LoadState.Loading) {
+            item {
+                CircularProgressIndicator()
             }
         }
     }

@@ -19,17 +19,16 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
-import com.hanialjti.allchat.CustomKoin
 import com.hanialjti.allchat.R
 import com.hanialjti.allchat.component.TopBar
 import com.hanialjti.allchat.viewmodels.EditUserInfoViewModel
-import org.koin.androidx.compose.getViewModel
+import com.hanialjti.allchat.getViewModel
 
 @OptIn(ExperimentalMaterialApi::class)
 @Composable
 fun EditUserInfoScreen(
     navController: NavHostController,
-    viewModel: EditUserInfoViewModel = getViewModel(scope = CustomKoin.getScope())
+    viewModel: EditUserInfoViewModel = getViewModel()
 ) {
 
     val uiState by remember(viewModel) { viewModel.uiState }.collectAsState()

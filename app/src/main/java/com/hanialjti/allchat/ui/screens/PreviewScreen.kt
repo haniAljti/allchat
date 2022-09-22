@@ -11,19 +11,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
 import coil.compose.rememberAsyncImagePainter
-import com.hanialjti.allchat.CustomKoin
 import com.hanialjti.allchat.component.TextInput
 import com.hanialjti.allchat.component.TopBar
 import com.hanialjti.allchat.models.Attachment
 import com.hanialjti.allchat.viewmodels.ChatViewModel
-import org.koin.androidx.compose.getViewModel
+import com.hanialjti.allchat.getViewModel
 
 @Composable
 fun ImagePreviewScreen(
-    messageId: String,
+    messageId: Int,
     enableInput: Boolean,
     navController: NavHostController,
-    viewModel: ChatViewModel = getViewModel(scope = CustomKoin.getScope())
+    viewModel: ChatViewModel = getViewModel()
 ) {
 
     val uiState = viewModel.uiState.collectAsState().value

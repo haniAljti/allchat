@@ -64,10 +64,7 @@ class MainViewModel(
 
     suspend fun connect(userCredentials: UserCredentials?) {
         if (userCredentials?.password != null && userCredentials.username != null) {
-            connectionManager.connect(
-                userCredentials.username,
-                userCredentials.password
-            )
+            connectionManager.connect(userCredentials)
         }
     }
 
@@ -75,11 +72,8 @@ class MainViewModel(
         viewModelScope.launch {
             userPreferencesManager.userCredentials
                 .collectLatest { userCredentials ->
-                    if (userCredentials?.password != null && userCredentials.username != null) {
-                        connectionManager.connect(
-                            userCredentials.username,
-                            userCredentials.password
-                        )
+                    if (userCredentials != null) {
+                        connectionManager.connect(userCredentials)
                     }
                 }
         }

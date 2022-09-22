@@ -3,10 +3,7 @@ package com.hanialjti.allchat.localdatabase
 import androidx.room.Database
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
-import com.hanialjti.allchat.models.entity.Conversation
-import com.hanialjti.allchat.models.entity.ConversationParticipantsCrossRef
-import com.hanialjti.allchat.models.entity.Message
-import com.hanialjti.allchat.models.entity.User
+import com.hanialjti.allchat.models.entity.*
 
 //@InstallIn(SingletonComponent::class)
 //@Module
@@ -24,7 +21,7 @@ import com.hanialjti.allchat.models.entity.User
 //}
 
 @Database(entities = [User::class, Message::class, Conversation::class, ConversationParticipantsCrossRef::class], version = 1)
-@TypeConverters(Converters::class)
+@TypeConverters(Converters::class, MessageStatusConverter::class)
 abstract class AllChatLocalRoomDatabase: RoomDatabase() {
     abstract fun userDao(): UserDao
     abstract fun conversationDao(): ConversationDao

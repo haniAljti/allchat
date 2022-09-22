@@ -29,7 +29,12 @@ class AuthenticationViewModel(
                         val username = _uiState.value.username
                         val password = _uiState.value.password
                         if (username.isNotEmpty() && password.isNotEmpty())
-                            userPreferencesManager.updateUserCredentials(UserCredentials(username, password))
+                            userPreferencesManager.updateUserCredentials(
+                                UserCredentials(
+                                    username,
+                                    password
+                                )
+                            )
                     }
                 }
         }
@@ -48,8 +53,10 @@ class AuthenticationViewModel(
             val username = _uiState.value.username
             val password = _uiState.value.password
             connectionManager.connect(
-                username,
-                password
+                UserCredentials(
+                    username,
+                    password
+                )
             )
         }
     }

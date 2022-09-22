@@ -1,6 +1,8 @@
 package com.hanialjti.allchat.di
 
 import androidx.room.Room
+import androidx.work.WorkManager
+import com.hanialjti.allchat.AllChatWorkManager
 import com.hanialjti.allchat.datastore.CryptoManager
 import com.hanialjti.allchat.datastore.UserPreferencesManager
 import com.hanialjti.allchat.localdatabase.AllChatLocalRoomDatabase
@@ -8,13 +10,16 @@ import com.hanialjti.allchat.repository.XmppChatRepository
 import com.hanialjti.allchat.repository.ConversationRepository
 import com.hanialjti.allchat.repository.UserRepository
 import com.hanialjti.allchat.viewmodels.*
+import com.hanialjti.allchat.worker.SendMessageWorker
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import org.koin.android.ext.koin.androidContext
+import org.koin.androidx.workmanager.dsl.worker
 import org.koin.core.qualifier.named
 import org.koin.dsl.module
+import kotlin.math.sin
 
 val appModule = module {
     single(qualifier = named(DispatcherQualifiers.Main)) {
@@ -52,7 +57,7 @@ val appModule = module {
         ConversationRepository(get(), get())
     }
     single {
-        XmppChatRepository(get(), get())
+        XmppChatRepository(get(), get(), get())
     }
     single {
         UserRepository(get())
@@ -67,7 +72,7 @@ val appModule = module {
         EditUserInfoViewModel()
     }
     factory {
-        ConversationsViewModel(get(), get(), get(), get())
+        ConversationsViewModel(get(), get(), get(), get(), get())
     }
     single {
         AuthenticationViewModel(get(), get())
@@ -75,5 +80,15 @@ val appModule = module {
     single {
         MainViewModel(get(), get(), get(), get())
     }
+    single {
+        WorkManager.getInstance(androidContext())
+    }
+    single {
+        AllChatWorkManager(get())
+    }
+    worker { SendMessageWorker(androidContext(), get(), get(), get(), get()) }
+}
 
+val workerFactoryModule = module {
+    factory { LocalContextWorkerFactory() }
 }

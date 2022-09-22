@@ -5,7 +5,7 @@ import com.hanialjti.allchat.models.entity.*
 import com.hanialjti.allchat.utils.currentTimestamp
 
 data class UiMessage(
-    val id: String,
+    val id: Int,
     val body: String? = null,
     val timestamp: Long = currentTimestamp,
     val from: String? = null,

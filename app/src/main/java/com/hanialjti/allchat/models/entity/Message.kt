@@ -1,17 +1,16 @@
 package com.hanialjti.allchat.models.entity
 
-import androidx.room.ColumnInfo
-import androidx.room.Embedded
-import androidx.room.Entity
-import androidx.room.PrimaryKey
+import androidx.room.*
 import com.hanialjti.allchat.utils.currentTimestamp
 import java.util.*
 
 @Entity
+@TypeConverters(MessageStatusConverter::class)
 data class Message(
-    @PrimaryKey
+    @PrimaryKey(autoGenerate = true)
     @ColumnInfo(name = "messageId")
-    val id: String = UUID.randomUUID().toString(),
+    val id: Int = 0,
+    val remoteId: String? = null,
     val body: String? = null,
     val timestamp: Long = currentTimestamp,
     val conversation: String? = null,
@@ -26,12 +25,34 @@ data class Message(
     val location: Location? = null
 )
 
-enum class Status { Pending, Sent, Seen, Received, Error }
+fun Message.toErrorStatusMessage() = StatusMessage(
+    id = id,
+    remoteId = remoteId,
+    timestamp = timestamp,
+    status = Status.Error,
+    from = from,
+    owner = owner,
+    conversation = conversation
+)
+
+
+enum class Status(val value: Int) {
+    Pending(0),
+    Error(1),
+    Sent(2),
+    Acknowledged(3),
+    Received(4),
+    Seen(5),
+}
+
 enum class Type { Chat, GroupChat }
 
+@TypeConverters(MessageStatusConverter::class)
 data class StatusMessage(
+    @PrimaryKey(autoGenerate = true)
     @ColumnInfo(name = "messageId")
-    val id: String,
+    val id: Int = 0,
+    val remoteId: String? = null,
     val timestamp: Long,
     val status: Status,
     val from: String?,
@@ -39,9 +60,12 @@ data class StatusMessage(
     val conversation: String?
 )
 
+@TypeConverters(MessageStatusConverter::class)
 data class UpdateMessage(
+    @PrimaryKey(autoGenerate = true)
     @ColumnInfo(name = "messageId")
-    val id: String = UUID.randomUUID().toString(),
+    val id: Int = 0,
+    val remoteId: String? = null,
     val body: String? = null,
     val timestamp: Long = currentTimestamp,
     val conversation: String? = null,
@@ -56,7 +80,7 @@ data class UpdateMessage(
 )
 
 fun Message.toUpdateMessage() =
-    UpdateMessage(id, body, timestamp, conversation, from, owner, readBy, type, media, location)
+    UpdateMessage(id, remoteId, body, timestamp, conversation, from, owner, readBy, type, media, location)
 
 data class Location(
     val lat: Double,

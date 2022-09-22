@@ -29,7 +29,7 @@ fun PreviewReceivedMessageGradiant() {
     ReceivedMessage(
         message = UiMessage(
             body = "Hi\nksdkfm",
-            id = UUID.randomUUID().toString()
+            id = 1
         ),
         lastMessageFromSameSender = false,
         onResumeAudio = {  },

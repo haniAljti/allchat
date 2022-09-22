@@ -1,8 +1,10 @@
 package com.hanialjti.allchat.component
 
+import android.graphics.drawable.Icon
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.Icon
 import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
@@ -10,10 +12,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import com.hanialjti.allchat.R
 import com.hanialjti.allchat.models.UiMessage
+import com.hanialjti.allchat.models.entity.Status
 import com.hanialjti.allchat.ui.screens.MessageTime
 import com.hanialjti.allchat.ui.screens.imageBottomCornerRadius
+import com.hanialjti.allchat.ui.theme.Green
 import com.hanialjti.allchat.ui.theme.SentMessageGradiant
 
 @Composable
@@ -38,7 +45,9 @@ fun SentMessage(
                 timestamp = message.timestamp,
                 modifier = Modifier.padding(horizontal = 20.dp)
             )
-            message.status?.name?.let { Text(text = it, color = MaterialTheme.colors.primary) }
+            message.status?.let { messageStatus ->
+                MessageStatusIcon(messageStatus = messageStatus)
+            }
         }
 
         Column(
@@ -88,6 +97,57 @@ fun SentMessage(
         }
     }
 }
+
+@Composable
+fun MessageStatusIcon(messageStatus: Status) {
+    when (messageStatus) {
+        Status.Pending -> {
+            MessageStatusIcon(
+                iconRes = R.drawable.ic_pending,
+                tint = MaterialTheme.colors.primary
+            )
+        }
+        Status.Sent -> {
+            MessageStatusIcon(
+                iconRes = R.drawable.ic_sent,
+                tint = MaterialTheme.colors.primary
+            )
+        }
+        Status.Acknowledged -> {
+            MessageStatusIcon(
+                iconRes = R.drawable.ic_acknowledged,
+                tint = MaterialTheme.colors.primary
+            )
+        }
+        Status.Seen -> {
+            MessageStatusIcon(
+                iconRes = R.drawable.ic_acknowledged,
+                tint = Green
+            )
+        }
+        Status.Error -> {
+            MessageStatusIcon(
+                iconRes = R.drawable.ic_error,
+                tint = Color.Red
+            )
+        }
+    }
+}
+
+@Composable
+fun MessageStatusIcon(
+    modifier: Modifier = Modifier,
+    iconRes: Int,
+    tint: Color
+) {
+    Icon(
+        painter = painterResource(id = iconRes),
+        tint = tint,
+        contentDescription = null
+    )
+}
+
+
 
 @Composable
 fun PlaceHolderMessage() {

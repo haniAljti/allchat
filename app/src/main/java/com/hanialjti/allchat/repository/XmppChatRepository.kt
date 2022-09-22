@@ -3,13 +3,17 @@ package com.hanialjti.allchat.repository
 import androidx.paging.ExperimentalPagingApi
 import androidx.paging.Pager
 import androidx.paging.PagingConfig
+import androidx.work.ListenableWorker
+import com.hanialjti.allchat.AllChatWorkManager
 import com.hanialjti.allchat.localdatabase.AllChatLocalRoomDatabase
 import com.hanialjti.allchat.models.ChatState
 import com.hanialjti.allchat.models.MessageOperation
 import com.hanialjti.allchat.models.MessageQueryResult
+import com.hanialjti.allchat.models.Resource
 import com.hanialjti.allchat.models.entity.Message
 import com.hanialjti.allchat.models.entity.Status
 import com.hanialjti.allchat.models.entity.StatusMessage
+import com.hanialjti.allchat.models.entity.toErrorStatusMessage
 import com.hanialjti.allchat.paging.MessageRemoteMediator
 import com.hanialjti.allchat.xmpp.XmppConnectionHelper
 import kotlinx.coroutines.Dispatchers
@@ -17,6 +21,7 @@ import kotlinx.coroutines.withContext
 import timber.log.Timber
 
 class XmppChatRepository constructor(
+    private val workManager: AllChatWorkManager,
     localDb: AllChatLocalRoomDatabase,
     private val remoteDb: XmppConnectionHelper,
 ) {
@@ -31,19 +36,46 @@ class XmppChatRepository constructor(
         pagingSourceFactory = { messageDao.getMessagesByConversation(conversation, owner) }
     ).flow
 
-    suspend fun markMessageAsDisplayed(messageId: String) = withContext(Dispatchers.IO) {
+    suspend fun resendAllPendingMessages(owner: String) {
+        val pendingMessages = messageDao.getPendingMessagesByOwner(owner)
+        pendingMessages.forEach {
+            workManager.createAndExecuteSendMessageWork(it.id.toLong())
+        }
+    }
+
+    suspend fun markMessageAsDisplayed(messageId: Int) = withContext(Dispatchers.IO) {
         val message = getMessageById(messageId)
         val sendResult = remoteDb.markMessageAsDisplayed(message)
         handleMessageOperation(sendResult)
     }
 
-    suspend fun beginSendMessageWork(message: Message) {
-        messageDao.upsertMessage(message)
+    suspend fun sendMessage(message: Message) {
+        val messageId = messageDao.insertOrIgnore(message)
+        if (messageId != -1L) {
+            launchSendMessageWork(messageId)
+        }
     }
 
-    suspend fun sendMessage(message: Message) = withContext(Dispatchers.IO) {
-        return@withContext remoteDb
-            .createAndSendMessage(message)
+    suspend fun sendMessageAndRegisterForAcknowledgment(messageId: Int): Resource<Message?> {
+        val messageToSend = getMessageById(messageId)
+
+        val sendResult = remoteDb.sendMessage(messageToSend)
+
+        when (sendResult) {
+            is Resource.Success -> {
+                sendResult.data?.let { updateMessage(it) }
+            }
+            is Resource.Error -> {
+                updateMessage(messageToSend.copy(status = Status.Error))
+            }
+            else -> {  }
+        }
+
+        return sendResult
+    }
+
+    private fun launchSendMessageWork(messageId: Long) {
+        workManager.createAndExecuteSendMessageWork(messageId)
     }
 
     suspend fun retrievePreviousPage(
@@ -63,9 +95,31 @@ class XmppChatRepository constructor(
 
     }
 
+    suspend fun syncMessages(
+        afterMessage: Message?,
+        pageSize: Int
+    ) = withContext(Dispatchers.IO) {
+        val messagePage = remoteDb.syncMessages(afterMessage, pageSize)
+        messagePage
+            .messageList
+            .forEach {
+                handleMessageOperation(it)
+            }
+        return@withContext messagePage.error?.let {
+            MessageQueryResult.Error(messagePage.error)
+        } ?: MessageQueryResult.Success(messagePage.isComplete)
+    }
+
+    suspend fun syncMessages(owner: String) {
+        val mostRecentMessage = messageDao.getMostRecentMessage(owner)
+
+        syncMessages(mostRecentMessage, 50)
+    }
+
     suspend fun listenForMessageChanges() {
         remoteDb.listenForMessageChanges()
             .collect { message ->
+                Timber.d("registering new message $message")
                 handleMessageOperation(message)
             }
     }
@@ -93,12 +147,16 @@ class XmppChatRepository constructor(
             }
     }
 
-    private suspend fun upsertMessage(message: MessageOperation.Created) {
-        messageDao.upsertMessage(message.message)
-        message.message.conversation?.let {
+    private suspend fun updateMessage(message: Message) {
+        messageDao.updateMessage(message)
+    }
+
+    suspend fun upsertMessage(message: Message) {
+        messageDao.upsertMessage(message)
+        message.conversation?.let {
             conversationsDao.updateLastMessage(
-                lastMessage = message.message.body,
-                lastUpdated = message.message.timestamp,
+                lastMessage = message.body,
+                lastUpdated = message.timestamp,
                 conversationId = it
             )
         }
@@ -111,13 +169,16 @@ class XmppChatRepository constructor(
     suspend fun handleMessageOperation(messageOperation: MessageOperation) {
         when (messageOperation) {
             is MessageOperation.Created -> {
-                upsertMessage(messageOperation)
+                upsertMessage(messageOperation.message)
             }
             is MessageOperation.StatusChanged -> {
+                Timber.d("${messageOperation.message.remoteId} is now ${messageOperation.message.status}")
                 upsertStatusChange(messageOperation.message)
                 if (messageOperation.message.status == Status.Seen && messageOperation.message.owner != messageOperation.message.from) {
-                    val message = messageDao.getMessageById(messageOperation.id)
-                    updatePreviousMessagesStatus(message)
+                    val message = messageDao.getMessageByRemoteId(messageOperation.id)
+                    if (message != null) {
+                        updatePreviousMessagesStatus(message)
+                    }
                 }
             }
             is MessageOperation.Error -> {
@@ -132,11 +193,14 @@ class XmppChatRepository constructor(
         remoteDb.updateMyChatState(chatState)
     }
 
-    fun getMessageFlowById(messageId: String) = messageDao.getMessageFlowById(messageId)
+    fun observeLastMessageNotSentByOwner(owner: String, conversationId: String) =
+        messageDao.getLastMessageNotSendByOwner(owner, conversationId)
 
-    suspend fun getMessageById(messageId: String) = messageDao.getMessageById(messageId)
+    fun getMessageFlowById(messageId: Int) = messageDao.getMessageFlowById(messageId)
 
-    suspend fun saveMessageContentUri(messageId: String, contentUri: String) =
+    suspend fun getMessageById(messageId: Int) = messageDao.getMessageById(messageId)
+
+    suspend fun saveMessageContentUri(messageId: Int, contentUri: String) =
         messageDao.saveContentUri(messageId, contentUri)
 
 }

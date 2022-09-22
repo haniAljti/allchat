@@ -5,22 +5,18 @@ import androidx.lifecycle.viewModelScope
 import androidx.paging.cachedIn
 import androidx.paging.filter
 import androidx.paging.map
-import androidx.work.OneTimeWorkRequestBuilder
 import com.hanialjti.allchat.R
 import com.hanialjti.allchat.datastore.UserPreferencesManager
 import com.hanialjti.allchat.models.*
-import com.hanialjti.allchat.models.entity.Conversation
-import com.hanialjti.allchat.models.entity.Message
-import com.hanialjti.allchat.models.entity.Type
-import com.hanialjti.allchat.models.entity.User
-import com.hanialjti.allchat.repository.XmppChatRepository
+import com.hanialjti.allchat.models.entity.*
 import com.hanialjti.allchat.repository.ConversationRepository
 import com.hanialjti.allchat.repository.UserRepository
+import com.hanialjti.allchat.repository.XmppChatRepository
 import com.hanialjti.allchat.utils.asLocalDateTime
 import com.hanialjti.allchat.utils.asUiDate
 import com.hanialjti.allchat.utils.getDefaultDrawableRes
-import com.hanialjti.allchat.worker.SendMessageWorker
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import timber.log.Timber
@@ -38,11 +34,43 @@ class ChatViewModel(
     private val _chatUiState = MutableStateFlow(ChatScreenUiState())
     val uiState: StateFlow<ChatScreenUiState> get() = _chatUiState
 
+    @OptIn(FlowPreview::class)
+    val lastReceivedMessage = userPreferencesManager
+        .username
+        .filterNotNull()
+        .flatMapConcat {
+            chatRepository
+                .observeLastMessageNotSentByOwner(
+                    it,
+                    conversationId
+                )
+        }
+
+    init {
+        updateMyChatState(ChatState.Active(conversationId))
+
+        viewModelScope.launch {
+            lastReceivedMessage
+                .filterNotNull()
+                .collect { message ->
+                    if (!message.body.isNullOrEmpty() && message.status != Status.Seen) {
+                        chatRepository.markMessageAsDisplayed(message.id)
+                    }
+                }
+        }
+    }
+
     val messages = userPreferencesManager
         .username
         .flatMapLatest {
+            if (it != null) {
+                chatRepository.resendAllPendingMessages(it)
+            }
             chatRepository
                 .messages(conversationId, it)
+                .onEach {
+                    resetUnreadCounter()
+                }
                 .distinctUntilChanged()
                 .map { messages ->
                     messages
@@ -50,19 +78,19 @@ class ChatViewModel(
                             message.body != null || message.media != null || message.location != null
                         }
                         .map { message ->
-                        UiMessage(
-                            id = message.id,
-                            body = message.body,
-                            timestamp = message.timestamp,
-                            from = message.from,
-                            status = message.status,
-                            readBy = message.readBy,
-                            type = message.type,
-                            attachment = message.media?.asAttachment() ?: message.location?.asAttachment(),
-                        )
-                    }
+                            UiMessage(
+                                id = message.id,
+                                body = message.body,
+                                timestamp = message.timestamp,
+                                from = message.from,
+                                status = message.status,
+                                readBy = message.readBy,
+                                type = message.type,
+                                attachment = message.media?.asAttachment()
+                                    ?: message.location?.asAttachment(),
+                            )
+                        }
                 }
-                .cachedIn(viewModelScope)
         }
         .cachedIn(viewModelScope)
 
@@ -74,13 +102,10 @@ class ChatViewModel(
         }
     }
 
-    fun markMessageAsDisplayed(messageId: String) {
-        viewModelScope.launch { chatRepository.markMessageAsDisplayed(messageId) }
-    }
-
-    fun getAttachment(messageId: String) = chatRepository.getMessageFlowById(messageId).map {
-        it.media?.asAttachment()
-    }
+    fun getAttachment(messageId: Int) =
+        chatRepository.getMessageFlowById(messageId).map {
+            it.media?.asAttachment()
+        }
 
     private fun updateMyChatState(chatState: ChatState) {
         viewModelScope.launch {
@@ -120,7 +145,7 @@ class ChatViewModel(
                 owner = owner,
                 type = if (isGroupChat) Type.GroupChat else Type.Chat
             )
-            chatRepository.saveTempMessage(message)
+            chatRepository.sendMessage(message)
         }
     }
 
@@ -192,10 +217,10 @@ class ChatViewModel(
 
 //        _conversationId = conversationId
 //        _isGroupChat = isGroupChat
-        updateMyChatState(ChatState.Active(conversationId))
+//        updateMyChatState(ChatState.Active(conversationId))
     }
 
-    fun resetUnreadCounter() {
+    private fun resetUnreadCounter() {
         viewModelScope.launch { conversationRepository.resetUnreadCounter(conversationId) }
     }
 

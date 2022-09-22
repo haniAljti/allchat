@@ -9,11 +9,15 @@ import com.hanialjti.allchat.localdatabase.AllChatLocalRoomDatabase
 import com.hanialjti.allchat.localdatabase.MessageDao
 import com.hanialjti.allchat.models.entity.Media
 import com.hanialjti.allchat.models.entity.Message
+import com.hanialjti.allchat.models.entity.Status
+import com.hanialjti.allchat.utils.currentTimestamp
+import kotlinx.coroutines.runBlocking
 import org.hamcrest.CoreMatchers.equalTo
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.mockito.kotlin.eq
 
 @RunWith(AndroidJUnit4::class)
 class AllChatLocalRoomDatabaseTest {
@@ -44,5 +48,41 @@ class AllChatLocalRoomDatabaseTest {
         )
 //        messageDao.insert(message)
         val messages = messageDao.getAllByConversation("1")
+    }
+
+    @Test
+    fun messageStatus_lessThanSaved_shouldNotSave() = runBlocking {
+        val message = Message(
+            id = 1,
+            timestamp = currentTimestamp,
+            status = Status.Seen,
+            remoteId = "1"
+        )
+
+        db.messageDao().insertOrIgnore(message)
+        db.messageDao().updateMessageStatus(
+            "1", Status.Acknowledged
+        )
+
+        val savedMessage = db.messageDao().getMessageById(1)
+        assertThat(savedMessage.status, equalTo(Status.Seen))
+    }
+
+    @Test
+    fun messageStatus_greaterThanSaved_shouldSave() = runBlocking {
+        val message = Message(
+            id = 1,
+            timestamp = currentTimestamp,
+            status = Status.Pending,
+            remoteId = "1"
+        )
+
+        db.messageDao().insertOrIgnore(message)
+        db.messageDao().updateMessageStatus(
+            "1", Status.Acknowledged
+        )
+
+        val savedMessage = db.messageDao().getMessageById(1)
+        assertThat(savedMessage.status, equalTo(Status.Acknowledged))
     }
 }

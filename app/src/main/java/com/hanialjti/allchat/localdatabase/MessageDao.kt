@@ -19,16 +19,13 @@ interface MessageDao {
     @Query("SELECT * FROM Message WHERE conversation = :conversation ORDER BY timestamp DESC")
     fun getAllByConversation(conversation: String?): List<Message>
 
-//    @Query("UPDATE Message SET status = :status WHERE messageId = :messageId")
-//    suspend fun updateMessageStatus(messageId: String, status: Status)
-
     @Query(
         "UPDATE Message SET status = :status " +
                 "WHERE timestamp < :timestamp " +
                 "AND conversation = :conversationId " +
                 "AND `from` = owner " +
                 "AND owner = :owner " +
-                "AND status = 'Sent'"
+                "AND status = 2 OR status = 3 OR status = 4"
     )
     suspend fun updateStatusForMessagesBeforeTimestamp(
         status: Status,
@@ -37,28 +34,31 @@ interface MessageDao {
         conversationId: String
     )
 
+    @Update(onConflict = IGNORE)
+    suspend fun updateMessage(message: Message)
+
     @Insert(onConflict = IGNORE, entity = Message::class)
     suspend fun insertMessageStatus(status: StatusMessage): Long
 
     @Query(
-        "UPDATE Message SET Status = " +
-                "CASE WHEN status = 'Pending' OR status = 'Error' THEN :status " +
-                "WHEN status = 'Sent' AND :status = 'Seen' OR :status = 'Received' THEN :status " +
-                "WHEN status = 'Received' AND :status = 'Seen' THEN :status " +
-                "ELSE status END " +
-                "WHERE messageId = :messageId"
+        "UPDATE Message SET status = " +
+                "CASE WHEN status > :status THEN status " +
+                "ELSE :status END " +
+                "WHERE remoteId = :remoteId"
     )
-    suspend fun updateMessageStatus(messageId: String, status: Status)
+    suspend fun updateMessageStatus(remoteId: String?, status: Status)
 
     @Insert(onConflict = IGNORE)
     suspend fun insertOrIgnore(message: Message): Long
 
     @Transaction
     suspend fun upsertMessageStatus(status: StatusMessage) {
-        val insertResult = insertMessageStatus(status)
+        val existingMessage = getMessageByRemoteId(status.remoteId)
 
-        if (insertResult == -1L) {
-            updateMessageStatus(status.id, status.status)
+        if (existingMessage != null) {
+            updateMessageStatus(status.remoteId, status.status)
+        } else {
+            insertMessageStatus(status)
         }
     }
 
@@ -70,25 +70,40 @@ interface MessageDao {
 
     @Transaction
     suspend fun upsertMessage(message: Message) {
-        val insertResult = insertOrIgnore(message)
+        val existingMessage = getMessageByRemoteId(message.remoteId)
 
-        if (insertResult == -1L) {
+        if (existingMessage == null) {
+            insertOrIgnore(message)
+        } else {
             updateUpdateMessage(message.toUpdateMessage())
         }
     }
 
-    @Query("SELECT * FROM Message WHERE conversation = :conversation ORDER BY timestamp DESC LIMIT 1 ")
-    suspend fun getMostRecentMessage(conversation: String): Message?
+    @Query("SELECT * FROM Message WHERE status = 0 OR status = 1 AND owner = :owner")
+    suspend fun getPendingMessagesByOwner(owner: String): List<Message>
+
+    @Query("SELECT * FROM Message WHERE remoteId = :remoteId")
+    suspend fun getMessageByRemoteId(remoteId: String?): Message?
+
+    @Query("SELECT * FROM Message WHERE conversation = :conversation AND owner = :owner ORDER BY timestamp DESC LIMIT 1 ")
+    suspend fun getMostRecentMessage(conversation: String, owner: String): Message?
 
     @Query("SELECT * FROM Message WHERE owner = :owner ORDER BY timestamp DESC LIMIT 1 ")
-    suspend fun getMostRecentMessageByOwner(owner: String): Message?
+    suspend fun getMostRecentMessage(owner: String): Message?
 
     @Query("SELECT * FROM Message WHERE messageId = :messageId")
-    fun getMessageFlowById(messageId: String): Flow<Message>
+    fun getMessageFlowById(messageId: Int): Flow<Message>
+
+    @Query("SELECT * FROM Message " +
+            "WHERE owner = :owner " +
+            "AND owner != `from` " +
+            "And conversation = :conversation " +
+            "ORDER BY timestamp DESC limit 1")
+    fun getLastMessageNotSendByOwner(owner: String, conversation: String): Flow<Message>
 
     @Query("SELECT * FROM Message WHERE messageId = :messageId")
-    suspend fun getMessageById(messageId: String): Message
+    suspend fun getMessageById(messageId: Int): Message
 
     @Query("UPDATE Message SET mediaCacheUri = :cacheUri WHERE messageId = :messageId")
-    suspend fun saveContentUri(messageId: String, cacheUri: String)
+    suspend fun saveContentUri(messageId: Int, cacheUri: String)
 }

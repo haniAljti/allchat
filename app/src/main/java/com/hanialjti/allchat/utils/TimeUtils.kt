@@ -4,17 +4,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.stringResource
 import com.hanialjti.allchat.R
 import com.hanialjti.allchat.models.UiText
-import java.text.SimpleDateFormat
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import java.util.*
 
 val currentTimestamp: Long
     get() = System.currentTimeMillis()
-
 
 const val TWO_DIGIT_FORMAT = "HH:mm"
 const val DEFAULT_PATTERN = "yyyy-MM-dd HH:mm:ss.SSS"
@@ -27,8 +24,11 @@ const val DATE_TIME_MONTH_LONG = "dd MMMM, yyyy - $TWO_DIGIT_FORMAT"
  * @return a formatted timestamp string
  */
 fun Long.formatTimestamp(pattern: String = DEFAULT_PATTERN): String {
-    val simpleDateFormat = SimpleDateFormat(pattern, Locale.getDefault())
-    return simpleDateFormat.format(Date(this))
+    val localDateTime = Instant.ofEpochMilli(this)
+        .atZone(ZoneId.systemDefault())
+        .toLocalDateTime()
+
+    return localDateTime.format(DateTimeFormatter.ofPattern(pattern))
 }
 
 sealed class UiDate(
@@ -99,8 +99,8 @@ fun LocalDateTime.asUiDate(): UiDate {
     }
 }
 
-fun Long.asLocalDateTime() =
+fun Long.asLocalDateTime(): LocalDateTime =
     Instant.ofEpochMilli(this).atZone(ZoneId.systemDefault()).toLocalDateTime()
 
-fun Long.asLocalDate() =
+fun Long.asLocalDate(): LocalDate =
     Instant.ofEpochMilli(this).atZone(ZoneId.systemDefault()).toLocalDate()

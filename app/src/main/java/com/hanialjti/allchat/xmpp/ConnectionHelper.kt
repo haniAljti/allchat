@@ -1,5 +1,5 @@
 package com.hanialjti.allchat.xmpp
 
-class ConnectionHelper(connectionCredentials: XmppConnectionCredentials) {
+class ConnectionHelper(connectionCredentials: XmppConnectionConfig) {
 
 }

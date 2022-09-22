@@ -33,7 +33,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
-import com.hanialjti.allchat.CustomKoin
 import com.hanialjti.allchat.models.Contact
 import com.hanialjti.allchat.models.ContactInfo
 import com.hanialjti.allchat.ui.theme.Green
@@ -43,13 +42,13 @@ import com.hanialjti.allchat.ui.toEditUserInfoScreen
 import com.hanialjti.allchat.utils.TWO_DIGIT_FORMAT
 import com.hanialjti.allchat.utils.formatTimestamp
 import com.hanialjti.allchat.viewmodels.ConversationsViewModel
-import org.koin.androidx.compose.getViewModel
+import com.hanialjti.allchat.getViewModel
 import timber.log.Timber
 
 @Composable
 fun ConversationsScreen(
     navController: NavHostController,
-    viewModel: ConversationsViewModel = getViewModel(scope = CustomKoin.getScope())
+    viewModel: ConversationsViewModel = getViewModel()
 ) {
 
     val uiState by remember(viewModel) {

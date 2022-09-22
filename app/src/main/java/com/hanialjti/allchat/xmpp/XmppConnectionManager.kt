@@ -1,21 +1,47 @@
 package com.hanialjti.allchat.xmpp
 
+import androidx.work.ListenableWorker
 import com.hanialjti.allchat.ConnectionManager
+import com.hanialjti.allchat.datastore.UserPreferencesManager
+import com.hanialjti.allchat.models.UserCredentials
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.jivesoftware.smack.ConnectionListener
 import org.jivesoftware.smack.XMPPConnection
 import org.jivesoftware.smack.tcp.XMPPTCPConnection
+import org.jivesoftware.smackx.carbons.CarbonManager
 import timber.log.Timber
+import kotlin.math.log
 
 class XmppConnectionManager(
-    private val connection: XMPPTCPConnection
+    private val connection: XMPPTCPConnection,
+    private val userPreferencesManager: UserPreferencesManager,
+    private val carbonManager: CarbonManager
 ) : ConnectionManager, ConnectionListener {
+
+    private val workers: MutableList<ListenableWorker> = mutableListOf()
+    private var connectRequested: Boolean = false
+
+    override suspend fun registerWorker(worker: ListenableWorker): Unit =
+        withContext(Dispatchers.IO) {
+        workers.add(worker)
+        userPreferencesManager.userCredentials.first()?.let {
+            login(it)
+        }
+    }
+
+    override suspend fun unregisterWorker(worker: ListenableWorker) = withContext(Dispatchers.IO) {
+        workers.remove(worker)
+        disconnectConnection()
+    }
+
+
 
     override fun observeConnectivityStatus(): Flow<ConnectionManager.Status> = callbackFlow {
 
@@ -43,19 +69,38 @@ class XmppConnectionManager(
 
     }.distinctUntilChanged()
 
-    override suspend fun connect(username: String, password: String) = withContext(Dispatchers.IO) {
-        try {
-            connection.connect().login(username, password)
-        } catch (e: Exception) {
-            e.printStackTrace()
+    private suspend fun login(userCredentials: UserCredentials) = withContext(Dispatchers.IO) {
+        if (!connection.isAuthenticated) {
+            if (userCredentials.username != null && userCredentials.password != null) {
+                try {
+                    connection.connect().login(userCredentials.username, userCredentials.password)
+                    carbonManager.enableCarbons()
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
         }
     }
 
-    override suspend fun disconnect() = withContext(Dispatchers.IO) {
-        try {
-            connection.disconnect()
-        } catch (e: Exception) {
-            e.printStackTrace()
+    private suspend fun disconnectConnection() = withContext(Dispatchers.IO) {
+        if (connection.isAuthenticated && workers.isEmpty() && !connectRequested) {
+            try {
+                connection.disconnect()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
     }
+
+    override suspend fun connect(userCredentials: UserCredentials) = withContext(Dispatchers.IO) {
+        connectRequested = true
+        login(userCredentials)
+    }
+
+
+    override suspend fun disconnect() = withContext(Dispatchers.IO) {
+        connectRequested = false
+        disconnectConnection()
+    }
+
 }

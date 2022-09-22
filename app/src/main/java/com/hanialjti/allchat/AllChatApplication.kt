@@ -1,10 +1,8 @@
 package com.hanialjti.allchat
 
 import android.app.Application
-import com.hanialjti.allchat.xmpp.DataExtensionElement
-import com.hanialjti.allchat.xmpp.DataItemExtensionProvider
+import com.hanialjti.allchat.xmpp.XmppConnectionConfig
 import org.jivesoftware.smack.android.AndroidSmackInitializer
-import org.jivesoftware.smack.provider.ProviderManager
 import timber.log.Timber
 import timber.log.Timber.DebugTree
 import timber.log.Timber.Forest.plant
@@ -12,8 +10,19 @@ import timber.log.Timber.Forest.plant
 class AllChatApplication: Application() {
     override fun onCreate() {
         super.onCreate()
+        AllChat.initialize(
+            this,
+            ConnectionType.Xmpp(
+                XmppConnectionConfig(
+                    host = "192.168.0.42",
+                    domain = "localhost",
+                    port = 5222
+                )
+            )
+        )
+
         AndroidSmackInitializer.initialize(this)
-        ProviderManager.addExtensionProvider(DataExtensionElement.elementName, DataExtensionElement.namespace, DataItemExtensionProvider())
+
 
         if (Timber.forest().isEmpty()) {
             plant(DebugTree())

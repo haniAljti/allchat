@@ -30,10 +30,7 @@ class ConnectivityLifecycleObserver(
 
     private suspend fun connect(userCredentials: UserCredentials?) {
         if (userCredentials?.username != null && userCredentials.password != null) {
-            connectionManager.connect(
-                username = userCredentials.username,
-                password = userCredentials.password
-            )
+            connectionManager.connect(userCredentials)
         }
     }
 

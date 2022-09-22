@@ -12,15 +12,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
-import com.hanialjti.allchat.CustomKoin
 import com.hanialjti.allchat.component.BottomSheetKnob
+import com.hanialjti.allchat.getViewModel
 import com.hanialjti.allchat.viewmodels.AddContactViewModel
-import org.koin.androidx.compose.getViewModel
 
 @Composable
 fun AddContactScreen(
     navController: NavHostController,
-    viewModel: AddContactViewModel = getViewModel(scope = CustomKoin.getScope())
+    viewModel: AddContactViewModel = getViewModel()
 ) {
 
     LaunchedEffect(Unit) { viewModel.updateOwner("user_1") }

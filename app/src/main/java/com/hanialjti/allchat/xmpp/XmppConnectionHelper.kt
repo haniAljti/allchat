@@ -5,7 +5,8 @@ import com.hanialjti.allchat.models.entity.*
 import com.hanialjti.allchat.utils.currentTimestamp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
-import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.jivesoftware.smack.SmackException.NoResponseException
@@ -14,28 +15,23 @@ import org.jivesoftware.smack.StanzaListener
 import org.jivesoftware.smack.XMPPException
 import org.jivesoftware.smack.chat2.ChatManager
 import org.jivesoftware.smack.packet.Presence
-import org.jivesoftware.smack.packet.Stanza
-import org.jivesoftware.smack.packet.StanzaBuilder
-import org.jivesoftware.smack.packet.StanzaFactory
-import org.jivesoftware.smack.packet.id.StanzaIdSource
 import org.jivesoftware.smack.roster.Roster
 import org.jivesoftware.smack.roster.RosterListener
 import org.jivesoftware.smack.tcp.XMPPTCPConnection
 import org.jivesoftware.smackx.bookmarks.BookmarkManager
-import org.jivesoftware.smackx.chat_markers.ChatMarkersListener
-import org.jivesoftware.smackx.chat_markers.ChatMarkersManager
-import org.jivesoftware.smackx.chat_markers.ChatMarkersState
+import org.jivesoftware.smackx.carbons.CarbonCopyReceivedListener
+import org.jivesoftware.smackx.carbons.CarbonManager
 import org.jivesoftware.smackx.chat_markers.element.ChatMarkersElements
 import org.jivesoftware.smackx.chatstates.ChatStateListener
 import org.jivesoftware.smackx.chatstates.ChatStateManager
 import org.jivesoftware.smackx.hints.element.StoreHint
-import org.jivesoftware.smackx.httpfileupload.HttpFileUploadManager
 import org.jivesoftware.smackx.mam.MamManager
 import org.jivesoftware.smackx.muc.MultiUserChatManager
 import org.jivesoftware.smackx.pubsub.Item
 import org.jivesoftware.smackx.pubsub.PayloadItem
 import org.jivesoftware.smackx.pubsub.PubSubManager
 import org.jivesoftware.smackx.pubsub.listener.ItemEventListener
+import org.jivesoftware.smackx.time.EntityTimeManager
 import org.jivesoftware.smackx.vcardtemp.VCardManager
 import org.jivesoftware.smackx.vcardtemp.packet.VCard
 import org.jxmpp.jid.Jid
@@ -44,19 +40,19 @@ import org.jxmpp.jid.parts.Resourcepart
 import timber.log.Timber
 import java.io.IOException
 import java.net.URL
+import java.time.Instant
+import java.time.ZoneOffset
 import java.util.*
 
 
 class XmppConnectionHelper(
-    private val connection: XMPPTCPConnection
+    private val connection: XMPPTCPConnection,
+    private val rosterManager: Roster,
+    private val carbonManager: CarbonManager
 ) {
-
-    private val waitingForAcknowledgment = MutableStateFlow<Message?>(null)
 
     private val mucChatManager get() = MultiUserChatManager.getInstanceFor(connection)
     private val mamManager get() = MamManager.getInstanceFor(connection)
-    private val uploadManager get() = HttpFileUploadManager.getInstanceFor(connection)
-    private val rosterManager get() = Roster.getInstanceFor(connection)
     private val vCardManager get() = VCardManager.getInstanceFor(connection)
     private var pubSubManager = PubSubManager.getInstanceFor(
         connection,
@@ -65,14 +61,7 @@ class XmppConnectionHelper(
     private val chatManager = ChatManager.getInstanceFor(connection)
     private val chatStateManager = ChatStateManager.getInstance(connection)
     private val bookmarkManager get() = BookmarkManager.getBookmarkManager(connection)
-    private val chatMarkersManager get() = ChatMarkersManager.getInstanceFor(connection)
-
-    init {
-        connection.setUseStreamManagement(true)
-        connection.setUseStreamManagementResumption(true)
-
-        rosterManager.subscriptionMode = Roster.SubscriptionMode.accept_all
-    }
+    private val timeManager = EntityTimeManager.getInstanceFor(connection)
 
     suspend fun updateMyChatState(chatState: ChatState) {
         val smackChatState = when (chatState) {
@@ -93,34 +82,61 @@ class XmppConnectionHelper(
 
     private fun observeAcknowledgmentMessages() = callbackFlow {
 
-        awaitClose {
-            connection.removeAllStanzaIdAcknowledgedListeners()
-        }
+        val ackListener = StanzaListener { stanza ->
 
-
-        waitingForAcknowledgment.collect { message ->
-            if (message != null) {
-                val listener = StanzaListener { stanza ->
-                    launch {
-                        send(
-                            MessageOperation.StatusChanged(
-                                StatusMessage(
-                                    id = message.id,
-                                    timestamp = currentTimestamp,
-                                    status = Status.Sent,
-                                    owner = connection.getOwner(),
-                                    from = message.from,
-                                    conversation = message.conversation
-                                )
+            if (stanza.isMessageAck()) {
+                Timber.d("New Acknowledgment message! $stanza")
+                launch {
+                    send(
+                        MessageOperation.StatusChanged(
+                            StatusMessage(
+                                remoteId = stanza.stanzaId,
+                                timestamp = currentTimestamp,
+                                status = Status.Acknowledged,
+                                owner = connection.getOwner(),
+                                from = connection.getOwner(),
+                                conversation = stanza.to.asBareJid().toString()
                             )
                         )
-                    }
+                    )
                 }
-
-                connection.addStanzaIdAcknowledgedListener(message.id, listener)
             }
         }
 
+        connection.addStanzaAcknowledgedListener(ackListener)
+
+        awaitClose {
+            connection.removeStanzaAcknowledgedListener(ackListener)
+        }
+
+    }
+
+    private fun observeCarbonCopies() = callbackFlow {
+        val carbonListener = CarbonCopyReceivedListener { direction, carbonCopy, wrappingMessage ->
+            Timber.d("New carbon copy direction: $direction, carbon: $carbonCopy, wrappingMessage: $wrappingMessage ")
+            launch {
+                send(
+                    MessageOperation.Created(
+                        Message(
+                            remoteId = carbonCopy.stanzaId,
+                            body = carbonCopy.body,
+                            timestamp = currentTimestamp,
+                            conversation = connection.getConversationIdFromStanza(carbonCopy),
+                            from = carbonCopy.getStringFrom(),
+                            owner = connection.getOwner(),
+                            status = Status.Acknowledged,
+                            type = carbonCopy.type.toMessageType()
+                        )
+                    )
+                )
+            }
+        }
+
+        carbonManager.addCarbonCopyReceivedListener(carbonListener)
+
+        awaitClose {
+            carbonManager.removeCarbonCopyReceivedListener(carbonListener)
+        }
     }
 
     fun observeChatStates() = callbackFlow {
@@ -138,6 +154,78 @@ class XmppConnectionHelper(
         awaitClose { chatStateManager.removeChatStateListener(chatStateListener) }
     }
 
+    private suspend fun MamManager.MamQueryArgs.getMessagePage(): MessagePage {
+        return try {
+            val query = mamManager.queryArchive(this)
+            val page = query.page
+            val messages = page.messages
+            val forwardedMessages = page.forwarded
+
+            MessagePage(
+                messageList = messages.zip(forwardedMessages) { message, forwarded ->
+                    if (message.hasExtension(ChatMarkersElements.DisplayedExtension.QNAME)) {
+                        val displayedMarker = message.getChatMarker()
+                        MessageOperation.StatusChanged(
+                            StatusMessage(
+                                remoteId = displayedMarker?.stanzaId,
+                                timestamp = forwarded.timestamp(),
+                                status = Status.Seen,
+                                owner = connection.getOwner(),
+                                from = message.getStringFrom(),
+                                conversation = connection.getConversationIdFromStanza(message)
+                            )
+                        )
+                    } else {
+                        MessageOperation.Created(
+                            Message(
+                                remoteId = message.stanzaId,
+                                body = message.body,
+                                timestamp = forwarded.timestamp(),
+                                conversation = connection.getConversationIdFromStanza(message),
+                                from = message.getStringFrom(),
+                                owner = connection.getOwner(),
+                                status = Status.Acknowledged,
+                                type = message.type.toMessageType()
+                            )
+                        )
+                    }
+                },
+                isComplete = query.isComplete,
+                error = null
+            )
+        } catch (e: Exception) {
+            MessagePage(isComplete = false, error = e)
+        }
+    }
+
+    private fun getDateWithOffset(localEpochTime: Long, offset: String): Date {
+        val epochMilliWithOffset = Instant.ofEpochMilli(localEpochTime).atOffset(ZoneOffset.of(offset)).toInstant().toEpochMilli()
+        return Date(epochMilliWithOffset)
+    }
+
+    suspend fun syncMessages(
+        afterMessage: Message?,
+        pageSize: Int
+    ): MessagePage {
+
+        val serverOffset = timeManager.getTime(connection.xmppServiceDomain).tzo
+        val date = afterMessage?.timestamp?.let { getDateWithOffset(it, serverOffset) }
+
+        val pageArgs = MamManager.MamQueryArgs
+            .builder()
+            .setResultPageSize(pageSize)
+            .apply {
+                if (afterMessage == null) {
+                    queryLastPage()
+                } else {
+                    limitResultsSince(date)
+                }
+            }
+            .build()
+
+        return pageArgs.getMessagePage()
+    }
+
     suspend fun getPreviousPage(
         beforeMessage: Message?,
         conversationId: String? = null,
@@ -145,25 +233,20 @@ class XmppConnectionHelper(
     ): MessagePage {
         return try {
 
-            val pageArgs = if (beforeMessage == null) MamManager.MamQueryArgs
+            val date = beforeMessage?.timestamp?.let { Date(it) }
+            val pageArgs = MamManager.MamQueryArgs
                 .builder()
                 .queryLastPage()
-                .setResultPageSize(pageSize).apply {
+                .setResultPageSize(pageSize)
+                .apply {
                     if (conversationId != null) {
                         limitResultsToJid(conversationId.asJid())
                     }
+                    if (beforeMessage?.timestamp != null) {
+                        limitResultsBefore(date)
+                    }
                 }
                 .build()
-            else
-                MamManager.MamQueryArgs.builder()
-                    .queryLastPage()
-                    .setResultPageSize(pageSize)
-                    .limitResultsBefore(Date(beforeMessage.timestamp)).apply {
-                        if (conversationId != null) {
-                            limitResultsToJid(conversationId.asJid())
-                        }
-                    }
-                    .build()
 
             val query = mamManager.queryArchive(pageArgs)
             val page = query.page
@@ -176,24 +259,24 @@ class XmppConnectionHelper(
                         val displayedMarker = message.getChatMarker()
                         MessageOperation.StatusChanged(
                             StatusMessage(
-                                id = displayedMarker.stanzaId,
+                                remoteId = displayedMarker?.stanzaId,
                                 timestamp = forwarded.timestamp(),
                                 status = Status.Seen,
                                 owner = connection.getOwner(),
                                 from = message.getStringFrom(),
-                                conversation = connection.getConversationIdFromMessage(message)
+                                conversation = connection.getConversationIdFromStanza(message)
                             )
                         )
                     } else {
                         MessageOperation.Created(
                             Message(
-                                id = message.stanzaId,
+                                remoteId = message.stanzaId,
                                 body = message.body,
                                 timestamp = forwarded.timestamp(),
-                                conversation = connection.getConversationIdFromMessage(message),
+                                conversation = connection.getConversationIdFromStanza(message),
                                 from = message.getStringFrom(),
                                 owner = connection.getOwner(),
-                                status = Status.Sent,
+                                status = Status.Acknowledged,
                                 type = message.type.toMessageType()
                             )
                         )
@@ -208,90 +291,56 @@ class XmppConnectionHelper(
     }
 
 
-    private suspend fun listenForChatMarkers() = callbackFlow {
-        val listener = ChatMarkersListener { state, message, _ ->
+    fun listenForMessageChanges() = merge(
+        observeNewMessages(),
+        observeAcknowledgmentMessages(),
+        observeCarbonCopies()
+    )
 
-            when (state) {
-                ChatMarkersState.displayed -> {
-                    val displayedMarker = message.getChatMarker()
-                    launch {
-                        send(
-                            MessageOperation.StatusChanged(
-                                StatusMessage(
-                                    id = displayedMarker.stanzaId,
-                                    timestamp = currentTimestamp,
-                                    status = Status.Seen,
-                                    owner = connection.getOwner(),
-                                    from = message.getStringFrom(),
-                                    conversation = connection.getConversationIdFromMessage(message)
-                                )
-                            )
-                        )
-                    }
-                }
-                ChatMarkersState.received -> {
-                    val receivedMarker = message.getChatMarker()
-                    launch {
-                        send(
-                            MessageOperation.StatusChanged(
-                                StatusMessage(
-                                    id = receivedMarker.stanzaId,
-                                    timestamp = currentTimestamp,
-                                    status = Status.Received,
-                                    owner = connection.getOwner(),
-                                    from = message.getStringFrom(),
-                                    conversation = connection.getConversationIdFromMessage(message)
-                                )
-                            )
-                        )
-                    }
-                }
-                else -> { /*Not yet supported*/
-                }
-            }
-        }
-
-        chatMarkersManager.addIncomingChatMarkerMessageListener(listener)
-
-        awaitClose { chatMarkersManager.removeIncomingChatMarkerMessageListener(listener) }
-    }
-
-    suspend fun listenForMessageChanges() = merge(listenForChatMarkers(), listenForMessages(), observeAcknowledgmentMessages())
-
-    private suspend fun listenForMessages() = callbackFlow<MessageOperation> {
+    private fun observeNewMessages() = callbackFlow {
         val listener = StanzaListener {
+            Timber.d("Received a message $it")
             val message = it as? org.jivesoftware.smack.packet.Message
-
-            message?.let {
-                when {
-                    message.hasExtension(ChatMarkersElements.DisplayedExtension.QNAME) -> {}
-
-                    else -> {
-                        launch {
-                            message.stanzaId?.let { stanzaId ->
-                                send(
-                                    MessageOperation.Created(
-                                        Message(
-                                            id = stanzaId,
-                                            body = message.body,
-                                            conversation = connection.getConversationIdFromMessage(
-                                                message
-                                            ),
-                                            from = message.from.asBareJid().localpartOrNull?.toString(),
-                                            status = Status.Received,
-                                            type = message.type.toMessageType(),
-                                            owner = connection.getOwner()
-                                        )
-                                    )
-                                )
-                            }
-                        }
-                    }
+            message?.getChatMarker()?.let { chatMarker ->
+                launch {
+                    send(
+                        MessageOperation.StatusChanged(
+                            StatusMessage(
+                                remoteId = chatMarker.stanzaId,
+                                timestamp = currentTimestamp,
+                                status = chatMarker.toStatus(),
+                                owner = connection.getOwner(),
+                                from = message.getStringFrom(),
+                                conversation = connection.getConversationIdFromStanza(message)
+                            )
+                        )
+                    )
+                }
+            } ?: launch {
+                message?.stanzaId?.let { stanzaId ->
+                    send(
+                        MessageOperation.Created(
+                            Message(
+                                remoteId = stanzaId,
+                                body = message.body,
+                                conversation = connection.getConversationIdFromStanza(
+                                    message
+                                ),
+                                from = message.from.asBareJid().localpartOrNull?.toString(),
+                                status = Status.Received,
+                                type = message.type.toMessageType(),
+                                owner = connection.getOwner()
+                            )
+                        )
+                    )
                 }
             }
         }
 
-        connection.addStanzaListener(listener) { it is org.jivesoftware.smack.packet.Message }
+        connection.addStanzaListener(listener) {
+            it is org.jivesoftware.smack.packet.Message &&
+                    it.type != org.jivesoftware.smack.packet.Message.Type.error
+        }
 
         awaitClose {
             connection.removeStanzaListener(listener)
@@ -340,7 +389,6 @@ class XmppConnectionHelper(
                 image = vCard.avatar.toString(),
             )
         }
-        StanzaFactory { "" }
     }
 
     suspend fun getParticipantsInfo(conversation: String) = withContext(Dispatchers.IO) {
@@ -442,7 +490,7 @@ class XmppConnectionHelper(
 
         fun getStatusMessage(status: Status) =
             StatusMessage(
-                id = message.id,
+                remoteId = message.remoteId,
                 timestamp = currentTimestamp,
                 status = status,
                 owner = connection.getOwner(),
@@ -454,7 +502,7 @@ class XmppConnectionHelper(
         val stanza = connection.stanzaFactory
             .buildMessageStanza()
             .to(message.conversation)
-            .addExtension(ChatMarkersElements.DisplayedExtension(message.id))
+            .addExtension(ChatMarkersElements.DisplayedExtension(message.remoteId))
             .addExtension(StoreHint.INSTANCE)
             .build()
 
@@ -486,7 +534,10 @@ class XmppConnectionHelper(
         }
     }
 
-    suspend fun createAndSendMessage(message: Message): MessageOperation =
+    fun createMessageStanzaFromMessage(message: Message) =
+        message.toMessageStanza(connection)
+
+    suspend fun sendMessage(message: Message): Resource<Message> =
         withContext(Dispatchers.IO) {
 
             val stanza = connection.stanzaFactory
@@ -497,54 +548,10 @@ class XmppConnectionHelper(
                 .addExtension(ChatMarkersElements.MarkableExtension.INSTANCE)
                 .build()
 
-            val messageWithId = message.copy(id = stanza.stanzaId)
-
-            val resource = tryExecute {
+            return@withContext tryExecute {
                 connection.sendStanza(stanza)
-                waitingForAcknowledgment.update { messageWithId }
+                return@tryExecute message.copy(remoteId = stanza.stanzaId, status = Status.Sent)
             }
-
-            return@withContext when (resource) {
-                is Resource.Error -> {
-                    Timber.e(resource.cause)
-                    MessageOperation.Error(
-                        StatusMessage(
-                            id = stanza.stanzaId,
-                            timestamp = currentTimestamp,
-                            status = Status.Error,
-                            owner = message.owner,
-                            from = message.from,
-                            conversation = message.conversation
-                        ),
-                        resource.cause
-                    )
-                }
-                else -> {
-                    MessageOperation.Created(messageWithId)
-                }
-            }
-
-//            try {
-//                connection.addStanzaIdAcknowledgedListener(stanza.stanzaId) {
-//                    Timber.d(it.toString())
-//                    continuation.resume(
-//                        MessageOperation.StatusChanged(
-//                            StatusMessage(
-//                                id = stanza.stanzaId,
-//                                timestamp = currentTimestamp,
-//                                status = Status.Sent,
-//                                owner = connection.getOwner(),
-//                                from = message.from,
-//                                conversation = message.conversation
-//                            )
-//                        )
-//                    )
-//                }
-//            } catch (e: StreamManagementException.StreamManagementNotEnabledException) {
-//                Timber.e(e)
-//            }
-
-//        awaitClose { connection.removeStanzaIdAcknowledgedListener(stanza.stanzaId) }
 
         }
 
