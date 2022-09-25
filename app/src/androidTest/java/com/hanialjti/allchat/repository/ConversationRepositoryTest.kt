@@ -4,13 +4,14 @@ import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.hanialjti.allchat.localdatabase.AllChatLocalRoomDatabase
-import com.hanialjti.allchat.localdatabase.ConversationDao
-import com.hanialjti.allchat.localdatabase.UserDao
-import com.hanialjti.allchat.models.ConversationAndUser
-import com.hanialjti.allchat.models.entity.Conversation
-import com.hanialjti.allchat.models.entity.User
-import com.hanialjti.allchat.xmpp.XmppConnectionHelper
+import com.hanialjti.allchat.data.local.room.AllChatLocalRoomDatabase
+import com.hanialjti.allchat.data.local.room.ConversationDao
+import com.hanialjti.allchat.data.local.room.UserDao
+import com.hanialjti.allchat.data.local.room.entity.ConversationAndUser
+import com.hanialjti.allchat.data.local.room.entity.Conversation
+import com.hanialjti.allchat.data.local.room.entity.User
+import com.hanialjti.allchat.data.remote.xmpp.XmppConnectionHelper
+import com.hanialjti.allchat.data.repository.ConversationRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
 import org.junit.After
@@ -18,9 +19,6 @@ import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.mockito.Mock
-import org.mockito.Mockito
-import org.mockito.kotlin.doReturn
 import org.mockito.kotlin.mock
 
 @RunWith(AndroidJUnit4::class)

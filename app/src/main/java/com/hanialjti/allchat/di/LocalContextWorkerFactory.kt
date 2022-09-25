@@ -4,7 +4,6 @@ import android.content.Context
 import androidx.work.ListenableWorker
 import androidx.work.WorkerFactory
 import androidx.work.WorkerParameters
-import com.hanialjti.allchat.CustomKoinComponent
 import org.koin.core.parameter.parametersOf
 import org.koin.core.qualifier.named
 

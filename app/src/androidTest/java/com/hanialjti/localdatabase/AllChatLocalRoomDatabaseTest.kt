@@ -5,19 +5,18 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.espresso.matcher.ViewMatchers.assertThat
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.hanialjti.allchat.localdatabase.AllChatLocalRoomDatabase
-import com.hanialjti.allchat.localdatabase.MessageDao
-import com.hanialjti.allchat.models.entity.Media
-import com.hanialjti.allchat.models.entity.Message
-import com.hanialjti.allchat.models.entity.Status
-import com.hanialjti.allchat.utils.currentTimestamp
+import com.hanialjti.allchat.data.local.room.AllChatLocalRoomDatabase
+import com.hanialjti.allchat.data.local.room.MessageDao
+import com.hanialjti.allchat.data.local.room.entity.Media
+import com.hanialjti.allchat.data.local.room.entity.Message
+import com.hanialjti.allchat.data.local.room.entity.Status
+import com.hanialjti.allchat.common.utils.currentTimestamp
 import kotlinx.coroutines.runBlocking
 import org.hamcrest.CoreMatchers.equalTo
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.mockito.kotlin.eq
 
 @RunWith(AndroidJUnit4::class)
 class AllChatLocalRoomDatabaseTest {

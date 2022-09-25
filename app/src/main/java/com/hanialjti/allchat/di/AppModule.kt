@@ -2,15 +2,19 @@ package com.hanialjti.allchat.di
 
 import androidx.room.Room
 import androidx.work.WorkManager
-import com.hanialjti.allchat.AllChatWorkManager
-import com.hanialjti.allchat.datastore.CryptoManager
-import com.hanialjti.allchat.datastore.UserPreferencesManager
-import com.hanialjti.allchat.localdatabase.AllChatLocalRoomDatabase
-import com.hanialjti.allchat.repository.XmppChatRepository
-import com.hanialjti.allchat.repository.ConversationRepository
-import com.hanialjti.allchat.repository.UserRepository
-import com.hanialjti.allchat.viewmodels.*
-import com.hanialjti.allchat.worker.SendMessageWorker
+import com.hanialjti.allchat.domain.AllChatWorkManager
+import com.hanialjti.allchat.data.local.datastore.CryptoManager
+import com.hanialjti.allchat.data.local.datastore.UserPreferencesManager
+import com.hanialjti.allchat.data.local.room.AllChatLocalRoomDatabase
+import com.hanialjti.allchat.data.repository.XmppChatRepository
+import com.hanialjti.allchat.data.repository.ConversationRepository
+import com.hanialjti.allchat.data.repository.UserRepository
+import com.hanialjti.allchat.presentation.viewmodels.*
+import com.hanialjti.allchat.domain.worker.SendMessageWorker
+import com.hanialjti.allchat.presentation.ConnectionLifeCycleObserver
+import com.hanialjti.allchat.presentation.MainViewModel
+import com.hanialjti.allchat.presentation.chat.ChatViewModel
+import com.hanialjti.allchat.presentation.conversation.ConversationsViewModel
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -19,7 +23,6 @@ import org.koin.android.ext.koin.androidContext
 import org.koin.androidx.workmanager.dsl.worker
 import org.koin.core.qualifier.named
 import org.koin.dsl.module
-import kotlin.math.sin
 
 val appModule = module {
     single(qualifier = named(DispatcherQualifiers.Main)) {
@@ -84,9 +87,12 @@ val appModule = module {
         WorkManager.getInstance(androidContext())
     }
     single {
+        ConnectionLifeCycleObserver(get(), get(), get(named(ScopeQualifiers.Application)))
+    }
+    single {
         AllChatWorkManager(get())
     }
-    worker { SendMessageWorker(androidContext(), get(), get(), get(), get()) }
+    worker { SendMessageWorker(androidContext(), get(), get(), get()) }
 }
 
 val workerFactoryModule = module {

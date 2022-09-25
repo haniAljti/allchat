@@ -1,7 +1,9 @@
 package com.hanialjti.allchat
 
 import android.app.Application
-import com.hanialjti.allchat.xmpp.XmppConnectionConfig
+import com.hanialjti.allchat.data.remote.ConnectionType
+import com.hanialjti.allchat.data.remote.xmpp.XmppConnectionConfig
+import com.hanialjti.allchat.di.AllChat
 import org.jivesoftware.smack.android.AndroidSmackInitializer
 import timber.log.Timber
 import timber.log.Timber.DebugTree
@@ -22,7 +24,6 @@ class AllChatApplication: Application() {
         )
 
         AndroidSmackInitializer.initialize(this)
-
 
         if (Timber.forest().isEmpty()) {
             plant(DebugTree())
