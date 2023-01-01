@@ -1,13 +1,10 @@
 package com.hanialjti.allchat.presentation.chat
 
 import android.media.MediaPlayer
-import android.util.Log
 import androidx.compose.runtime.*
-import com.hanialjti.allchat.models.Attachment
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import timber.log.Timber
 
 @Stable
 class MediaPlayerState(

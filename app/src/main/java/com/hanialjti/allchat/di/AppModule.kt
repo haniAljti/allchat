@@ -2,19 +2,28 @@ package com.hanialjti.allchat.di
 
 import androidx.room.Room
 import androidx.work.WorkManager
-import com.hanialjti.allchat.domain.AllChatWorkManager
 import com.hanialjti.allchat.data.local.datastore.CryptoManager
 import com.hanialjti.allchat.data.local.datastore.UserPreferencesManager
 import com.hanialjti.allchat.data.local.room.AllChatLocalRoomDatabase
-import com.hanialjti.allchat.data.repository.XmppChatRepository
 import com.hanialjti.allchat.data.repository.ConversationRepository
 import com.hanialjti.allchat.data.repository.UserRepository
-import com.hanialjti.allchat.presentation.viewmodels.*
+import com.hanialjti.allchat.data.repository.ChatRepository
+import com.hanialjti.allchat.data.repository.IChatRepository
+import com.hanialjti.allchat.data.tasks.ConversationTasksDataStore
+import com.hanialjti.allchat.data.tasks.MessageTasksDataSource
+import com.hanialjti.allchat.domain.MessageTasksDataSourceImpl
+import com.hanialjti.allchat.domain.usecase.*
+import com.hanialjti.allchat.domain.worker.CreateChatRoomWorker
 import com.hanialjti.allchat.domain.worker.SendMessageWorker
 import com.hanialjti.allchat.presentation.ConnectionLifeCycleObserver
 import com.hanialjti.allchat.presentation.MainViewModel
 import com.hanialjti.allchat.presentation.chat.ChatViewModel
 import com.hanialjti.allchat.presentation.conversation.ConversationsViewModel
+import com.hanialjti.allchat.presentation.create_chat_room.CreateChatRoomViewModel
+import com.hanialjti.allchat.presentation.invite_users.InviteUsersViewModel
+import com.hanialjti.allchat.presentation.viewmodels.AddContactViewModel
+import com.hanialjti.allchat.presentation.viewmodels.AuthenticationViewModel
+import com.hanialjti.allchat.presentation.viewmodels.EditUserInfoViewModel
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -44,6 +53,77 @@ val appModule = module {
         )
     }
     single {
+        CryptoManager()
+    }
+    single {
+        UserPreferencesManager(androidContext())
+    }
+    single {
+        ConversationRepository(get(), get(), get(), get())
+    }
+    single<IChatRepository> {
+        ChatRepository(
+            get(),
+            get(),
+            get(),
+            get()
+        )
+    }
+    single(createdAtStart = true) {
+        UserRepository(get(), get(), get(), get())
+    }
+    single {
+        AddContactViewModel(get(), get())
+    }
+    factory { params ->
+        ChatViewModel(
+            get(),
+            get(),
+            get(),
+            get(),
+            get(),
+            get(),
+            get(),
+            params.get(),
+            params.get()
+        )
+    }
+    factory {
+        CreateChatRoomViewModel(get())
+    }
+    single {
+        EditUserInfoViewModel()
+    }
+    factory {
+        ConversationsViewModel(get(), get(), get(), get(), get(), get())
+    }
+    factory { params ->
+        InviteUsersViewModel(params.get(), get(), get())
+    }
+    single {
+        AuthenticationViewModel(get())
+    }
+    single {
+        MainViewModel(get(), get(), get())
+    }
+    single {
+        WorkManager.getInstance(androidContext())
+    }
+    single {
+        ConversationTasksDataStore(get())
+    }
+    single {
+        ConnectionLifeCycleObserver(get(), get(), get())
+    }
+    single<MessageTasksDataSource> {
+        MessageTasksDataSourceImpl(get())
+    }
+    worker { SendMessageWorker(androidContext(), get(), get(), get()) }
+    worker { CreateChatRoomWorker(androidContext(), get(), get(), get()) }
+}
+
+val roomModule = module {
+    single {
         Room.databaseBuilder(
             androidContext(),
             AllChatLocalRoomDatabase::class.java,
@@ -51,48 +131,68 @@ val appModule = module {
         ).build()
     }
     single {
-        CryptoManager()
+        get<AllChatLocalRoomDatabase>().userDao()
+    }
+}
+
+val useCaseModule = module {
+    single {
+        GetContactsUseCase(get(), get())
     }
     single {
-        UserPreferencesManager(androidContext(), get(qualifier = named(ScopeQualifiers.Application)))
+        ResetUnreadCounterUseCase(get())
     }
     single {
-        ConversationRepository(get(), get())
+        GetMessagesUseCase(get(), get())
     }
     single {
-        XmppChatRepository(get(), get(), get())
+        GetContactInfoUseCase(get(), get())
     }
     single {
-        UserRepository(get())
+        CreateChatRoomUseCase(get(), get())
     }
     single {
-        AddContactViewModel(get(), get())
-    }
-    factory { params ->
-        ChatViewModel(get(), get(), get(), get(), params.get(), params.get())
+        AddUserToContactsUseCase(get(), get())
     }
     single {
-        EditUserInfoViewModel()
-    }
-    factory {
-        ConversationsViewModel(get(), get(), get(), get(), get())
+        SendReadMarkerForMessageUseCase(get())
     }
     single {
-        AuthenticationViewModel(get(), get())
+        GetMostRecentMessageUseCase(get(), get())
     }
     single {
-        MainViewModel(get(), get(), get(), get())
+        SyncChatsUseCase(get())
     }
     single {
-        WorkManager.getInstance(androidContext())
+        SyncMessagesUseCase(get(), get())
     }
     single {
-        ConnectionLifeCycleObserver(get(), get(), get(named(ScopeQualifiers.Application)))
+        GetUsersUseCase(get())
     }
     single {
-        AllChatWorkManager(get())
+        InviteUsersToChatRoomUseCase(get(), get())
     }
-    worker { SendMessageWorker(androidContext(), get(), get(), get()) }
+    single {
+        SendMessageUseCase(get(), get())
+    }
+    single {
+        GetConnectedUserUseCase(get())
+    }
+    single {
+        GetAttachmentUseCase(get())
+    }
+    single {
+        LoggedInUserUseCase(get())
+    }
+    single {
+        SignOut(get())
+    }
+    single {
+        SignIn(get())
+    }
+    single {
+        AuthenticationUseCases(get(), get(), get())
+    }
 }
 
 val workerFactoryModule = module {

@@ -1,28 +1,46 @@
 package com.hanialjti.allchat.presentation.ui.screens
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.*
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.navigation.NavHostController
 import com.hanialjti.allchat.presentation.component.BottomSheetKnob
+import com.hanialjti.allchat.presentation.ui.toAddNewContactScreen
+import com.hanialjti.allchat.presentation.ui.toCreateChatRoomScreens
 
 @Composable
 fun CreateEntityScreen(
-
+    navController: NavHostController
 ) {
     Column {
         BottomSheetKnob()
-        EntityObject(modifier = Modifier.padding(20.dp).clickable {  }, entity = Entity.Contact)
-        EntityObject(modifier = Modifier.padding(20.dp), entity = Entity.ChatRoom)
+        EntityObject(
+            modifier = Modifier
+                .clickable { navController.toAddNewContactScreen() }
+                .padding(20.dp)
+                .fillMaxWidth(),
+            entity = Entity.Contact
+        )
+        EntityObject(
+            modifier = Modifier
+                .clickable { navController.toCreateChatRoomScreens() }
+                .padding(20.dp)
+                .fillMaxWidth(),
+            entity = Entity.ChatRoom
+        )
+
+        Spacer(modifier = Modifier.padding(10.dp))
     }
 }
 
 @Composable
 fun EntityObject(modifier: Modifier = Modifier, entity: Entity) {
-    Text(text = entity.content, modifier)
+    Box(modifier = modifier) {
+        Text(text = entity.content)
+    }
 }
 
 sealed class Entity(val content: String) {

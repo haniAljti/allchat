@@ -1,4 +1,4 @@
-package com.hanialjti.allchat
+package com.hanialjti.allchat.common.utils
 
 import android.os.Build
 

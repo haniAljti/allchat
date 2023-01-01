@@ -1,7 +1,7 @@
 package com.hanialjti.allchat.presentation.ui
 
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.navigation.*
@@ -11,11 +11,12 @@ import com.google.accompanist.navigation.material.BottomSheetNavigator
 import com.google.accompanist.navigation.material.ExperimentalMaterialNavigationApi
 import com.google.accompanist.navigation.material.ModalBottomSheetLayout
 import com.google.accompanist.navigation.material.bottomSheet
-import com.hanialjti.allchat.data.local.datastore.UserCredentials
-import com.hanialjti.allchat.presentation.ui.screens.*
-import com.hanialjti.allchat.di.getViewModel
+import com.hanialjti.allchat.data.local.datastore.LoggedInUser
 import com.hanialjti.allchat.presentation.chat.ChatScreen
 import com.hanialjti.allchat.presentation.conversation.ConversationsScreen
+import com.hanialjti.allchat.presentation.create_chat_room.SelectInitialParticipantsScreen
+import com.hanialjti.allchat.presentation.invite_users.InviteUsersScreen
+import com.hanialjti.allchat.presentation.ui.screens.*
 
 @OptIn(ExperimentalMaterialNavigationApi::class)
 @Composable
@@ -23,28 +24,32 @@ fun NavigationLayout(
     modifier: Modifier = Modifier,
     bottomSheetNavigator: BottomSheetNavigator,
     navController: NavHostController,
-    userCredentials: UserCredentials?
+    loggedInUser: LoggedInUser?
 ) {
+
+    val initialDestination =
+        if (loggedInUser == null) Screen.SignIn.route else Screen.Conversations.route
+//    LaunchedEffect(loggedInUser) {
+//        if (userCredentials == null) {
+//            navController.toSignInScreen()
+//        }
+//    }
+
     ModalBottomSheetLayout(
         modifier = modifier,
         bottomSheetNavigator = bottomSheetNavigator,
         sheetShape = RoundedCornerShape(topStart = 15.dp, topEnd = 15.dp)
     ) {
 
-        LaunchedEffect(userCredentials) {
-            if (userCredentials == null) {
-                navController.toSignInScreen()
-            }
-        }
-        
         NavHost(
             navController = navController,
-            startDestination = Screen.Conversations.route
+            startDestination = initialDestination
         ) {
 
             composable(Screen.SignIn.route) {
                 AuthenticationScreen(navController)
             }
+
 
             composable(Screen.Conversations.route) {
                 ConversationsScreen(navController)
@@ -56,6 +61,22 @@ fun NavigationLayout(
 
             bottomSheet(Screen.AddContact.route) {
                 AddContactScreen(navController)
+            }
+
+            bottomSheet(Screen.AddChatEntityScreen.route) {
+                CreateEntityScreen(navController = navController)
+            }
+
+            composable(
+                route = Screen.InviteUsersScreen.route,
+                arguments = listOf(
+                    navArgument("chatRoomId") { type = NavType.StringType }
+                )
+            ) {
+                val chatRoomId = it.arguments?.getString("chatRoomId")
+                chatRoomId?.let {
+                    InviteUsersScreen(conversationId = chatRoomId, navController = navController)
+                } ?: throw IllegalArgumentException("Chat room id must not be null")
             }
 
             composable(
@@ -74,29 +95,40 @@ fun NavigationLayout(
                 }
             }
 
-            composable(
-                route = Screen.ImagePreview.route,
-                arguments = listOf(
-                    navArgument("messageId") { type = NavType.IntType },
-                    navArgument("enableInput") { type = NavType.BoolType }
-                )
-            ) { backStackEntry ->
-                backStackEntry.arguments?.getInt("messageId")?.let { messageId ->
-                    navController.previousBackStackEntry?.let {
-                        ImagePreviewScreen(
-                            messageId = messageId,
-                            enableInput = backStackEntry.arguments?.getBoolean("enableInput")
-                                ?: false,
-                            navController = navController,
-                            viewModel = getViewModel(
-                                owner = it,
-                            )
-                        )
-                    }
-                }
-            }
-        }
+            navigation(
+                route = Screen.CreateChatRoomScreens.route,
+                startDestination = CreateChatRoomNavDirection.SelectInitialParticipants.route,
+            ) {
 
+                composable(CreateChatRoomNavDirection.SelectInitialParticipants.route) {
+                    SelectInitialParticipantsScreen(navController = navController)
+                }
+
+            }
+
+
+//            composable(
+//                route = Screen.ImagePreview.route,
+//                arguments = listOf(
+//                    navArgument("messageId") { type = NavType.IntType },
+//                    navArgument("enableInput") { type = NavType.BoolType }
+//                )
+//            ) { backStackEntry ->
+//                backStackEntry.arguments?.getInt("messageId")?.let { messageId ->
+//                    navController.previousBackStackEntry?.let {
+//                        ImagePreview(
+//                            messageId = messageId,
+//                            enableInput = backStackEntry.arguments?.getBoolean("enableInput")
+//                                ?: false,
+//                            navController = navController,
+//                            viewModel = getViewModel(
+//                                owner = it,
+//                            )
+//                        )
+//                    }
+//                }
+//            }
+        }
 
 
     }
@@ -110,6 +142,10 @@ fun NavController.toChatScreen(contactId: String, isGroupChat: Boolean) {
     )
 }
 
+fun NavController.toCreateChatRoomScreens() {
+    navigate(Screen.CreateChatRoomScreens.route)
+}
+
 fun NavController.toEditUserInfoScreen() {
     navigate(Screen.EditUserInfo.route)
 }
@@ -121,6 +157,15 @@ fun NavController.toImagePreviewScreen(messageId: Int, enableInput: Boolean = fa
             .replace("{enableInput}", enableInput.toString())
     )
 }
+
+fun NavController.toInviteUsersScreen(chatRoomId: String) {
+    navigate(
+        Screen.InviteUsersScreen.route
+            .replace("{chatRoomId}", chatRoomId)
+    )
+}
+
+fun NavController.toCreateEntityScreen() = navigate(Screen.AddChatEntityScreen.route)
 
 fun NavController.toConversationsScreen() = navigate(
     Screen.Conversations.route,

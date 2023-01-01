@@ -13,7 +13,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.rememberAsyncImagePainter
 import coil.request.ImageRequest
 import com.hanialjti.allchat.R
-import com.hanialjti.allchat.models.Attachment
+import com.hanialjti.allchat.presentation.chat.Attachment
 
 @Composable
 fun ImageAttachment(

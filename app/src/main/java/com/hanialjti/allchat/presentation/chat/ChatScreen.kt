@@ -5,17 +5,18 @@ import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.DrawableRes
-import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.*
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.*
 import androidx.compose.runtime.*
@@ -41,19 +42,20 @@ import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.PermissionStatus
 import com.google.accompanist.permissions.rememberPermissionState
 import com.hanialjti.allchat.R
-import com.hanialjti.allchat.presentation.component.*
-import com.hanialjti.allchat.models.Attachment
-import com.hanialjti.allchat.presentation.conversation.ContactImage
-import com.hanialjti.allchat.models.UiMessage
-import com.hanialjti.allchat.models.defaultAttachmentName
-import com.hanialjti.allchat.presentation.ui.toImagePreviewScreen
 import com.hanialjti.allchat.common.utils.*
+import com.hanialjti.allchat.data.model.MessageItem
+import com.hanialjti.allchat.data.model.MessageStatus
+import com.hanialjti.allchat.di.getViewModel
+import com.hanialjti.allchat.presentation.component.*
+import com.hanialjti.allchat.presentation.conversation.ContactImage
+import com.hanialjti.allchat.presentation.ui.toInviteUsersScreen
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import com.hanialjti.allchat.di.getViewModel
 import org.koin.core.parameter.parametersOf
 import timber.log.Timber
+import java.time.LocalDateTime
+import java.util.UUID
 
 
 @OptIn(ExperimentalMaterialApi::class, ExperimentalPermissionsApi::class)
@@ -65,20 +67,9 @@ fun ChatScreen(
     viewModel: ChatViewModel = getViewModel(parameters = { parametersOf(contactId, isGroupChat) })
 ) {
 
-    LaunchedEffect(Unit) {
-        viewModel.initializeChat(
-            conversationId = contactId,
-            isGroupChat = isGroupChat
-        )
-    }
-
-    BackHandler(enabled = true) {
-        viewModel.setThisChatAsInactive()
-        navController.popBackStack()
-    }
-
     val uiState by remember(viewModel) { viewModel.uiState }.collectAsState()
     val messages = remember(viewModel) { viewModel.messages }.collectAsLazyPagingItems()
+    val showChatMenu = remember { mutableStateOf(false) }
 
     val bottomSheetState =
         rememberModalBottomSheetState(initialValue = ModalBottomSheetValue.Hidden)
@@ -124,75 +115,78 @@ fun ChatScreen(
     ) {
         DisposableEffect(
             Box {
+
                 Column {
                     ChatTopBar(
                         name = uiState.name,
                         status = uiState.status?.asString(),
                         image = uiState.image,
+                        chatMenuExpanded = showChatMenu.value,
+                        onChatMenuDismissed = { showChatMenu.value = false },
+                        inviteUsersOptionEnabled = isGroupChat,
+                        onInviteUsersClicked = { navController.toInviteUsersScreen(contactId) },
                         onBackClicked = { navController.popBackStack() },
                         onPersonClicked = { /*TODO*/ },
-                        onMenuClicked = { /*TODO*/ }
+                        onMenuClicked = { showChatMenu.value = true }
                     )
 
-                    uiState.owner?.let { owner ->
-                        MessagesList(
-                            messages = messages,
-                            trackPositions = uiState.trackPositions,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .weight(1f),
-                            owner = owner,
-                            onResumeAudio = { recording ->
-                                mediaPlayerState.playMedia(
-                                    recording,
-                                    uiState.trackPositions[recording.cacheUri]
+                    MessagesList(
+                        messages = messages,
+                        trackPositions = uiState.trackPositions,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .weight(1f),
+                        onResumeAudio = { recording ->
+                            mediaPlayerState.playMedia(
+                                recording,
+                                uiState.trackPositions[recording.cacheUri]
+                            )
+                            recording.cacheUri?.let { viewModel.updateTrackPosition(it, 0) }
+                        },
+                        onPauseAudio = { recording ->
+                            val stoppedAt = mediaPlayerState.pauseMedia()
+                            recording.cacheUri?.let {
+                                viewModel.updateTrackPosition(
+                                    it,
+                                    stoppedAt
                                 )
-                                recording.cacheUri?.let { viewModel.updateTrackPosition(it, 0) }
-                            },
-                            onPauseAudio = { recording ->
-                                val stoppedAt = mediaPlayerState.pauseMedia()
-                                recording.cacheUri?.let {
-                                    viewModel.updateTrackPosition(
-                                        it,
-                                        stoppedAt
-                                    )
-                                }
-                            },
-                            onAudioSeekValueChanged = { recording, seekValue ->
-                                recording.cacheUri?.let {
-                                    viewModel.updateTrackPosition(
-                                        it,
-                                        seekValue
-                                    )
-                                }
-                            },
-                            onPdfClicked = { pdf ->
-                                val uri = Uri.parse(pdf.cacheUri)
-                                val openPdfIntent = Intent(Intent.ACTION_VIEW)
-                                openPdfIntent.setDataAndType(uri, "application/pdf")
-                                openPdfIntent.flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
-
-                                val chooserIntent = Intent
-                                    .createChooser(
-                                        openPdfIntent,
-                                        context.getString(R.string.choose_pdf_title)
-                                    )
-
-                                try {
-                                    context.startActivity(chooserIntent)
-                                } catch (e: ActivityNotFoundException) {
-                                    e.printStackTrace()
-                                }
-                            },
-                            onImageClicked = { message ->
-                                navController.toImagePreviewScreen(message.id)
-                            },
-                            activeMessage = mediaPlayerState.activeRecording.value,
-                            onAttachmentDownloaded = { message, uri ->
-                                viewModel.saveMessageContentUri(message, uri)
                             }
-                        )
-                    }
+                        },
+                        onAudioSeekValueChanged = { recording, seekValue ->
+                            recording.cacheUri?.let {
+                                viewModel.updateTrackPosition(
+                                    it,
+                                    seekValue
+                                )
+                            }
+                        },
+                        onPdfClicked = { pdf ->
+                            val uri = Uri.parse(pdf.cacheUri)
+                            val openPdfIntent = Intent(Intent.ACTION_VIEW)
+                            openPdfIntent.setDataAndType(uri, "application/pdf")
+                            openPdfIntent.flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
+
+                            val chooserIntent = Intent
+                                .createChooser(
+                                    openPdfIntent,
+                                    context.getString(R.string.choose_pdf_title)
+                                )
+
+                            try {
+                                context.startActivity(chooserIntent)
+                            } catch (e: ActivityNotFoundException) {
+                                e.printStackTrace()
+                            }
+                        },
+                        onImageClicked = { message ->
+//                            navController.toImagePreviewScreen(message.id)
+                        },
+                        activeMessage = mediaPlayerState.activeRecording.value,
+                        onAttachmentDownloaded = { message, uri ->
+                            viewModel.saveMessageContentUri(message, uri)
+                        },
+                        lastReadMessage = viewModel::updateLastReadMessage
+                    )
 
                 }
 
@@ -250,6 +244,7 @@ fun ChatScreen(
                     Lifecycle.Event.ON_PAUSE -> {
                         mediaPlayerState.stopMedia()
                         mediaRecorderState.stopMediaRecorder()
+                        viewModel.setAllMessagesAsRead()
                     }
                     Lifecycle.Event.ON_DESTROY -> {
                         mediaPlayerState.releasePlayer()
@@ -353,164 +348,249 @@ fun Context.cameraLauncher(
 }
 
 
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalAnimationApi::class)
 @Composable
 fun MessagesList(
-    messages: LazyPagingItems<UiMessage>,
+    messages: LazyPagingItems<MessageItem>,
     trackPositions: Map<String, Int>,
     modifier: Modifier = Modifier,
-    owner: String,
     onAudioSeekValueChanged: (Attachment.Recording, Int) -> Unit,
     onResumeAudio: (Attachment.Recording) -> Unit,
     onPauseAudio: (Attachment.Recording) -> Unit,
     onPdfClicked: (Attachment.Pdf) -> Unit,
-    onImageClicked: (UiMessage) -> Unit,
-    onAttachmentDownloaded: (UiMessage, String) -> Unit,
-    activeMessage: Attachment.Recording?
+    onImageClicked: (MessageItem.MessageData) -> Unit,
+    onAttachmentDownloaded: (MessageItem.MessageData, String) -> Unit,
+    activeMessage: Attachment.Recording?,
+    lastReadMessage: (MessageItem.MessageData) -> Unit
 ) {
 
     val coroutine = rememberCoroutineScope()
     val context = LocalContext.current
 
+    val lastMessageNotSentByMe: MessageItem.MessageData? by remember(messages) {
+        derivedStateOf { messages.itemSnapshotList.firstOrNull { it is MessageItem.MessageData && !it.isFromMe() } as? MessageItem.MessageData }
+    }
+
+    LaunchedEffect(lastMessageNotSentByMe) {
+        lastMessageNotSentByMe?.let {
+            if (it.status == MessageStatus.Delivered || it.status == MessageStatus.Sent) {
+                lastReadMessage(it)
+            }
+        }
+    }
+
     val messageListState = rememberLazyListState()
 
+    val firstMessagesVisible by remember { derivedStateOf { messageListState.firstVisibleItemIndex < 25 } }
+
     LaunchedEffect(messages.itemCount) {
-        if (messages.loadState.prepend is LoadState.NotLoading)
+        if (messages.loadState.prepend is LoadState.NotLoading && !messageListState.isScrollInProgress)
             if (messageListState.firstVisibleItemIndex < 10) {
                 messageListState.animateScrollToItem(0)
             }
     }
 
-    LazyColumn(
-        reverseLayout = true,
-        modifier = modifier,
-        contentPadding = PaddingValues(bottom = 90.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        state = messageListState
-    ) {
+    Box(modifier = modifier) {
+        LazyColumn(
+            reverseLayout = true,
+            modifier = modifier.align(Alignment.BottomCenter),
+            contentPadding = PaddingValues(bottom = 90.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            state = messageListState
+        ) {
+
+            items(
+                messages.itemCount,
+                key = { index ->
+                    messages[index]?.itemId ?: UUID.randomUUID().toString()
+                }
+            ) { index ->
+
+                when (val currentMessage = messages[index]) {
+                    null -> PlaceHolderMessage()
+                    is MessageItem.MessageData -> {
+                        val nextMessage =
+                            if (index < messages.itemCount.minus(1)) messages[index + 1] else null
+                        val previousMessage = if (index > 0) messages[index - 1] else null
 
 
 
-        items(
-            count = messages.itemCount,
-            key = { messages[it]?.id ?: it }
-        ) { index ->
-            val currentMessage = messages[index]
-            val lastMessage = if (index < messages.itemCount - 1) messages[index + 1] else null
+                        LaunchedEffect(Unit) {
 
-            LaunchedEffect(Unit) {
-
-                when (val attachment = currentMessage?.attachment) {
-                    is Attachment.Recording -> {
-                        if (attachment.url != null && attachment.cacheUri == null) {
-                            coroutine.launch {
-                                val uri = context.saveAttachmentToInternalStorage(attachment)
-                                uri.path?.let { onAttachmentDownloaded(currentMessage, it) }
+                            when (val attachment = currentMessage.attachment) {
+                                is Attachment.Recording -> {
+                                    if (attachment.url != null && attachment.cacheUri == null) {
+                                        coroutine.launch {
+                                            val uri =
+                                                context.saveAttachmentToInternalStorage(attachment)
+                                            uri.path?.let {
+                                                onAttachmentDownloaded(
+                                                    currentMessage,
+                                                    it
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                                is Attachment.Pdf -> {
+                                    if (attachment.url != null && attachment.cacheUri == null) {
+                                        coroutine.launch {
+                                            val uri =
+                                                context.saveAttachmentToInternalStorage(attachment)
+                                            uri.path?.let {
+                                                onAttachmentDownloaded(
+                                                    currentMessage,
+                                                    it
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                                else -> {}
                             }
                         }
-                    }
-                    is Attachment.Pdf -> {
-                        if (attachment.url != null && attachment.cacheUri == null) {
-                            coroutine.launch {
-                                val uri = context.saveAttachmentToInternalStorage(attachment)
-                                uri.path?.let { onAttachmentDownloaded(currentMessage, it) }
+
+                        Box(
+                            modifier = Modifier
+                                .padding(
+                                    top = messageTopPadding(
+                                        lastMessage = nextMessage,
+                                        currentMessage = currentMessage
+                                    )
+                                )
+                                .animateItemPlacement()
+                        ) {
+
+                            val lastTrackPosition =
+                                if (currentMessage.attachment is Attachment.Recording)
+                                    trackPositions[currentMessage.attachment.cacheUri] else 0
+
+
+                            if (currentMessage.isFromMe()) {
+                                SentMessage(
+                                    message = currentMessage,
+                                    nextMessage = nextMessage,
+                                    previousMessage = previousMessage,
+                                    onAudioSeekValueChanged = {
+                                        onAudioSeekValueChanged(
+                                            currentMessage.attachment as Attachment.Recording,
+                                            it
+                                        )
+                                    },
+                                    onPauseAudio = { onPauseAudio(currentMessage.attachment as Attachment.Recording) },
+                                    onResumeAudio = { onResumeAudio(currentMessage.attachment as Attachment.Recording) },
+                                    onPdfClicked = { onPdfClicked(currentMessage.attachment as Attachment.Pdf) },
+                                    onImageClicked = { onImageClicked(currentMessage) },
+                                    isActiveMessage = activeMessage == currentMessage.attachment,
+                                    lastTrackPosition = lastTrackPosition ?: 0
+                                )
+                            } else {
+                                ReceivedMessage(
+                                    message = currentMessage,
+                                    nextMessage = nextMessage,
+                                    previousMessage = previousMessage,
+                                    onAudioSeekValueChanged = {
+                                        onAudioSeekValueChanged(
+                                            currentMessage.attachment as Attachment.Recording,
+                                            it
+                                        )
+                                    },
+                                    onPauseAudio = { onPauseAudio(currentMessage.attachment as Attachment.Recording) },
+                                    onResumeAudio = { onResumeAudio(currentMessage.attachment as Attachment.Recording) },
+                                    onPdfClicked = { onPdfClicked(currentMessage.attachment as Attachment.Pdf) },
+                                    onImageClicked = { onImageClicked(currentMessage) },
+                                    isActiveMessage = activeMessage == currentMessage.attachment,
+                                    lastTrackPosition = lastTrackPosition ?: 0
+                                )
                             }
+
                         }
                     }
-                    else -> {}
-                }
-            }
-
-            Box(
-                modifier = Modifier
-                    .padding(
-                        top = messageTopPadding(
-                            lastMessage = lastMessage,
-                            currentMessage = currentMessage
-                        )
-                    )
-                    .animateItemPlacement()
-            ) {
-
-                val lastTrackPosition = if (currentMessage?.attachment is Attachment.Recording)
-                    trackPositions[currentMessage.attachment.cacheUri] else 0
-
-                if (currentMessage == null) {
-                    PlaceHolderMessage()
-                }
-                else {
-                    if (owner == currentMessage.from) {
-                        SentMessage(
-                            message = currentMessage,
-                            lastMessageFromSameSender = lastMessage?.from == currentMessage.from,
-                            onAudioSeekValueChanged = {
-                                onAudioSeekValueChanged(
-                                    currentMessage.attachment as Attachment.Recording,
-                                    it
+                    is MessageItem.MessageDateSeparator -> {
+                        Box(
+                            modifier = Modifier
+                                .padding(10.dp)
+                                .padding(horizontal = 5.dp, vertical = 3.dp)
+                        ) {
+                            Text(
+                                text = currentMessage.date.asSeparator(),
+                                color = MaterialTheme.colors.primary,
+                                modifier = Modifier,
+                                fontSize = 16.sp
+                            )
+                        }
+                    }
+                    is MessageItem.NewMessagesSeparator -> {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Spacer(
+                                modifier = Modifier
+                                    .padding(10.dp)
+                                    .height(1.dp)
+                                    .weight(1f)
+                                    .background(MaterialTheme.colors.primary)
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .padding(10.dp)
+                                    .padding(horizontal = 5.dp, vertical = 3.dp)
+                            ) {
+                                Text(
+                                    text = currentMessage.date.asString(),
+                                    color = MaterialTheme.colors.primary,
+                                    modifier = Modifier,
+                                    fontSize = 16.sp
                                 )
-                            },
-                            onPauseAudio = { onPauseAudio(currentMessage.attachment as Attachment.Recording) },
-                            onResumeAudio = { onResumeAudio(currentMessage.attachment as Attachment.Recording) },
-                            onPdfClicked = { onPdfClicked(currentMessage.attachment as Attachment.Pdf) },
-                            onImageClicked = { onImageClicked(currentMessage) },
-                            isActiveMessage = activeMessage == currentMessage.attachment,
-                            lastTrackPosition = lastTrackPosition ?: 0
-                        )
-                    } else {
-                        ReceivedMessage(
-                            message = currentMessage,
-                            lastMessageFromSameSender = lastMessage?.from == currentMessage.from,
-                            onAudioSeekValueChanged = {
-                                onAudioSeekValueChanged(
-                                    currentMessage.attachment as Attachment.Recording,
-                                    it
-                                )
-                            },
-                            onPauseAudio = { onPauseAudio(currentMessage.attachment as Attachment.Recording) },
-                            onResumeAudio = { onResumeAudio(currentMessage.attachment as Attachment.Recording) },
-                            onPdfClicked = { onPdfClicked(currentMessage.attachment as Attachment.Pdf) },
-                            onImageClicked = { onImageClicked(currentMessage) },
-                            isActiveMessage = activeMessage == currentMessage.attachment,
-                            lastTrackPosition = lastTrackPosition ?: 0
-                        )
+                            }
+                            Spacer(
+                                modifier = Modifier
+                                    .padding(10.dp)
+                                    .height(1.dp)
+                                    .weight(1f)
+                                    .background(MaterialTheme.colors.primary)
+                            )
+                        }
                     }
                 }
             }
 
-            if (currentMessage != null && shouldDisplayDateSeparator(
-                    lastMessage?.timestamp?.asLocalDate(),
-                    currentMessage.timestamp.asLocalDate()
-                )
-            ) {
-                val currentMessageDateText =
-                    currentMessage.timestamp.asLocalDateTime().asUiDate()
 
-                Box(
-                    modifier = Modifier
-                        .padding(10.dp)
-                        .padding(horizontal = 5.dp, vertical = 3.dp)
-                ) {
-                    Text(
-                        text = currentMessageDateText.asSeparator(),
-                        color = MaterialTheme.colors.primary,
-                        modifier = Modifier,
-                        fontSize = 16.sp
-                    )
+            item {
+                AnimatedVisibility(visible = messages.loadState.append is LoadState.Loading) {
+                    CircularProgressIndicator()
                 }
             }
+
         }
 
-        if (messages.loadState.append is LoadState.Loading) {
-            item {
-                CircularProgressIndicator()
+        AnimatedVisibility(
+            visible = !firstMessagesVisible,
+            enter = scaleIn(),
+            exit = scaleOut(),
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(bottom = 90.dp, end = 20.dp)
+                .size(40.dp)
+        ) {
+            IconButton(
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .background(Color.White),
+                onClick = { coroutine.launch { messageListState.scrollToItem(0) } }
+            ) {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_down),
+                    contentDescription = null
+                )
             }
         }
     }
 }
 
 @Composable
-fun messageTopPadding(lastMessage: UiMessage?, currentMessage: UiMessage?): Dp {
-    return if (lastMessage == null || lastMessage.from == currentMessage?.from) 3.dp else 10.dp
+fun messageTopPadding(lastMessage: MessageItem?, currentMessage: MessageItem?): Dp {
+    return if (lastMessage is MessageItem.MessageData && currentMessage is MessageItem.MessageData) {
+        if (lastMessage.senderId == currentMessage.senderId) 3.dp else 10.dp
+    } else 3.dp
 }
 
 @Composable
@@ -518,6 +598,10 @@ fun ChatTopBar(
     name: String?,
     status: String?,
     image: ContactImage? = null,
+    chatMenuExpanded: Boolean,
+    onChatMenuDismissed: () -> Unit,
+    inviteUsersOptionEnabled: Boolean,
+    onInviteUsersClicked: () -> Unit,
     onBackClicked: () -> Unit,
     onPersonClicked: () -> Unit,
     onMenuClicked: () -> Unit
@@ -565,13 +649,39 @@ fun ChatTopBar(
                     }
                 }
 
-                IconButton(onClick = onMenuClicked) {
-                    Icon(
-                        painter = painterResource(id = R.drawable.ic_menu),
-                        contentDescription = null,
-                        modifier = Modifier.padding(20.dp),
-                        tint = MaterialTheme.colors.primary
-                    )
+                Box {
+                    IconButton(onClick = onMenuClicked) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_menu),
+                            contentDescription = null,
+                            modifier = Modifier.padding(20.dp),
+                            tint = MaterialTheme.colors.primary
+                        )
+                    }
+
+                    DropdownMenu(
+                        modifier = Modifier
+                            .width(200.dp)
+                            .background(
+                                color = MaterialTheme.colors.background,
+                                shape = RoundedCornerShape(15.dp)
+                            )
+                            .border(
+                                width = 1.dp,
+                                color = Color.White,
+                                shape = RoundedCornerShape(15.dp)
+                            ),
+                        expanded = chatMenuExpanded,
+                        onDismissRequest = onChatMenuDismissed
+                    ) {
+
+                        if (inviteUsersOptionEnabled) {
+                            DropdownMenuItem(onClick = onInviteUsersClicked) {
+                                Text("Invite Users")
+                            }
+                        }
+
+                    }
                 }
             }
             Spacer(
@@ -587,9 +697,9 @@ fun ChatTopBar(
 
 
 @Composable
-fun MessageTime(timestamp: Long, modifier: Modifier = Modifier) {
+fun MessageTime(timestamp: LocalDateTime, modifier: Modifier = Modifier) {
     Text(
-        text = timestamp.formatTimestamp(TWO_DIGIT_FORMAT),
+        text = timestamp.asString(TWO_DIGIT_FORMAT),
         color = MaterialTheme.colors.primary,
         modifier = modifier
     )

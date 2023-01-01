@@ -21,18 +21,6 @@ import androidx.compose.ui.unit.dp
 import coil.compose.rememberAsyncImagePainter
 import coil.request.ImageRequest
 
-data class Contact(
-    val id: String,
-    val lastUpdated: Long?,
-    val composing: List<String> = listOf(),
-    val content: ContactInfo? = null,
-    val name: String?,
-    val image: ContactImage?,
-    val isGroupChat: Boolean = false,
-    val isOnline: Boolean = false,
-    val unreadMessages: Int = 0,
-)
-
 sealed class ContactImage {
     class DynamicImage(val imageUrl: String) : ContactImage()
     class ImageRes(@DrawableRes val drawableRes: Int) : ContactImage()
@@ -64,9 +52,9 @@ sealed class ContactImage {
     }
 }
 
-sealed class ContactInfo(val text: UiText) {
-    class LastMessage(text: UiText, val read: Boolean): ContactInfo(text)
-    class Composing(text: UiText): ContactInfo(text)
+sealed class ContactContent(val text: UiText) {
+    class LastMessage(text: UiText, val read: Boolean): ContactContent(text)
+    class Composing(text: UiText): ContactContent(text)
 }
 
 sealed class UiText {

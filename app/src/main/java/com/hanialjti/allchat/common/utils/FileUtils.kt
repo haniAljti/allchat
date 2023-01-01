@@ -8,30 +8,38 @@ import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import com.hanialjti.allchat.common.exception.NotSupportedException
-import com.hanialjti.allchat.models.Attachment
-import com.hanialjti.allchat.data.local.room.entity.Media
+import com.hanialjti.allchat.presentation.chat.Attachment
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
 import java.net.URL
+import java.time.Instant
+import java.time.ZoneOffset
+import java.util.*
 
 private const val appName = "AllChat"
 private val photosDir = Environment.DIRECTORY_PICTURES + File.separator + appName
 
-private fun getMediaExtension(type: Media.Type) = when(type) {
-    Media.Type.Image -> ".jpg"
-    Media.Type.Audio -> ".acc"
-    Media.Type.Pdf -> ".pdf"
+private fun getMediaExtension(type: Attachment.Type) = when(type) {
+    Attachment.Type.Image -> ".jpg"
+    Attachment.Type.Audio -> ".acc"
+    Attachment.Type.Pdf -> ".pdf"
     else -> throw NotSupportedException("Media type is not yet supported!")
 }
 
+fun getDateWithOffset(localEpochTime: Long, offset: String): Date {
+    val epochMilliWithOffset =
+        Instant.ofEpochMilli(localEpochTime).atOffset(ZoneOffset.of(offset)).toInstant()
+            .toEpochMilli()
+    return Date(epochMilliWithOffset)
+}
 
 suspend fun Context.saveBitmapToInternalStorage(bmp: Bitmap, name: String): Uri = withContext(Dispatchers.IO) {
     return@withContext try {
 
-        val imageFile = File(cacheDir, "$name.jpg}")
+        val imageFile = File(cacheDir, "$name.jpg")
         val fileOutputStream = FileOutputStream(imageFile)
         fileOutputStream.use { stream ->
             if (!bmp.compress(Bitmap.CompressFormat.JPEG, 95, stream)) {
@@ -48,7 +56,7 @@ suspend fun Context.saveBitmapToInternalStorage(bmp: Bitmap, name: String): Uri 
 suspend fun Context.saveImageToInternalStorage(uri: Uri, name: String): Uri = withContext(Dispatchers.IO) {
     return@withContext try {
 
-        val imageFile = File(cacheDir, "$name.jpg}")
+        val imageFile = File(cacheDir, "$name.jpg")
         val fileOutputStream = FileOutputStream(imageFile)
         fileOutputStream.use { outputStream ->
             contentResolver.openInputStream(uri).use { inputStream ->
@@ -86,19 +94,19 @@ suspend fun Context.saveAttachmentToInternalStorage(attachment: Attachment): Uri
     }
 }
 
-fun Context.createFileInInternalStorage(name: String, type: Media.Type) =
+fun Context.createFileInInternalStorage(name: String, type: Attachment.Type) =
     File(cacheDir, name + getMediaExtension(type))
 
 
-suspend fun Context.saveMediaToExternalStorage(media: Media): Uri = withContext(Dispatchers.IO) {
+suspend fun Context.saveMediaToExternalStorage(media: Attachment): Uri = withContext(Dispatchers.IO) {
     return@withContext try {
 
         val uri: Uri?
 
-        val contentUri = getMediaContentUri(Media.Type.Image) ?: throw IOException("")
+        val contentUri = getMediaContentUri(Attachment.Type.Image) ?: throw IOException("")
 
         val contentValues = ContentValues().apply {
-            put(MediaStore.Images.ImageColumns.DISPLAY_NAME, media.name)
+            put(MediaStore.Images.ImageColumns.DISPLAY_NAME, media.displayName)
             put(MediaStore.MediaColumns.MIME_TYPE, "image/png")
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -127,7 +135,7 @@ suspend fun Context.saveMediaToExternalStorage(media: Media): Uri = withContext(
 
 fun Context.cacheCameraBitmap(bitmap: Bitmap, name: String): Uri? {
 
-    val contentUri = getMediaContentUri(Media.Type.Image) ?: return null
+    val contentUri = getMediaContentUri(Attachment.Type.Image) ?: return null
 
     val contentValues = ContentValues().apply {
         put(MediaStore.Images.ImageColumns.DISPLAY_NAME, name)
@@ -168,16 +176,16 @@ inline fun <T> sdk29AndUp(onSdk29AndUp: () -> T): T? {
     } else null
 }
 
-fun getMediaContentUri(type: Media.Type): Uri? {
+fun getMediaContentUri(type: Attachment.Type): Uri? {
     return when (type) {
-        Media.Type.Image -> {
+        Attachment.Type.Image -> {
             sdk29AndUp {
                 MediaStore.Images.Media.getContentUri(
                     MediaStore.VOLUME_EXTERNAL_PRIMARY
                 )
             } ?: MediaStore.Images.Media.EXTERNAL_CONTENT_URI
         }
-        Media.Type.Audio -> {
+        Attachment.Type.Audio -> {
             sdk29AndUp {
                 MediaStore.Audio.Media.getContentUri(
                     MediaStore.VOLUME_EXTERNAL_PRIMARY

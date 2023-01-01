@@ -7,6 +7,7 @@ import com.hanialjti.allchat.presentation.conversation.UiText
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
@@ -29,6 +30,10 @@ fun Long.formatTimestamp(pattern: String = DEFAULT_PATTERN): String {
         .toLocalDateTime()
 
     return localDateTime.format(DateTimeFormatter.ofPattern(pattern))
+}
+
+fun LocalDateTime.asString(pattern: String = DEFAULT_PATTERN): String {
+    return format(DateTimeFormatter.ofPattern(pattern))
 }
 
 sealed class UiDate(
@@ -71,7 +76,7 @@ sealed class UiDate(
 
 fun shouldDisplayDateSeparator(
     lastDate: LocalDate?,
-    currentDate: LocalDate
+    currentDate: LocalDate?
 ) = lastDate == null || !lastDate.isEqual(currentDate)
 
 

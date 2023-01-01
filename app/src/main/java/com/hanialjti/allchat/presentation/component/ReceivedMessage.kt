@@ -9,20 +9,23 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import com.hanialjti.allchat.models.UiMessage
+import com.hanialjti.allchat.data.model.MessageItem
 import com.hanialjti.allchat.presentation.chat.MessageTime
 import com.hanialjti.allchat.presentation.chat.imageBottomCornerRadius
 import com.hanialjti.allchat.presentation.ui.theme.ReceivedMessageGradiant
 
 @Composable
 fun ReceivedMessage(
-    message: UiMessage,
-    lastMessageFromSameSender: Boolean,
+    message: MessageItem.MessageData,
+    nextMessage: MessageItem?,
+    previousMessage: MessageItem?,
     onResumeAudio: () -> Unit,
     onPauseAudio: () -> Unit,
     onAudioSeekValueChanged: (Int) -> Unit,
@@ -38,6 +41,12 @@ fun ReceivedMessage(
         modifier = modifier
     ) {
 
+        val isNextMessageFromSameSender by remember {
+            mutableStateOf(
+                previousMessage != null && (previousMessage is MessageItem.MessageData && previousMessage.senderId == message.senderId || previousMessage !is MessageItem.MessageData)
+            )
+        }
+
         Column(
             modifier = Modifier
                 .padding(start = 20.dp)
@@ -45,7 +54,7 @@ fun ReceivedMessage(
                     brush = ReceivedMessageGradiant,
                     shape = RoundedCornerShape(
                         topEnd = 15.dp,
-                        bottomStart = if (lastMessageFromSameSender) 3.dp else 15.dp,
+                        bottomStart = if (isNextMessageFromSameSender) 3.dp else 15.dp,
                         bottomEnd = 15.dp
                     )
                 )
@@ -78,7 +87,7 @@ fun ReceivedMessage(
             if (!message.body.isNullOrEmpty()) {
                 Text(
                     text = message.body,
-                    color = Color.White,
+                    color = MaterialTheme.colors.primary,
                     modifier = Modifier.padding(10.dp)
                 )
             }
@@ -90,7 +99,7 @@ fun ReceivedMessage(
                 timestamp = message.timestamp,
                 modifier = Modifier.padding(horizontal = 20.dp)
             )
-            message.status?.name?.let { Text(text = it, color = MaterialTheme.colors.primary) }
+//            message.status?.name?.let { Text(text = it, color = MaterialTheme.colors.primary) }
         }
 
     }

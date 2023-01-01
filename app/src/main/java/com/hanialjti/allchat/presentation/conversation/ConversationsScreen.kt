@@ -17,8 +17,6 @@ import androidx.compose.material.Text
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment.Companion.BottomEnd
 import androidx.compose.ui.Alignment.Companion.Center
@@ -33,28 +31,30 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
-import com.hanialjti.allchat.presentation.ui.theme.Green
-import com.hanialjti.allchat.presentation.ui.toAddNewContactScreen
-import com.hanialjti.allchat.presentation.ui.toChatScreen
+import androidx.paging.compose.LazyPagingItems
+import androidx.paging.compose.collectAsLazyPagingItems
 import com.hanialjti.allchat.common.utils.TWO_DIGIT_FORMAT
-import com.hanialjti.allchat.common.utils.formatTimestamp
+import com.hanialjti.allchat.common.utils.asString
+import com.hanialjti.allchat.data.model.Contact
 import com.hanialjti.allchat.di.getViewModel
+import com.hanialjti.allchat.presentation.component.MessageStatusIcon
+import com.hanialjti.allchat.presentation.ui.theme.Green
+import com.hanialjti.allchat.presentation.ui.toChatScreen
+import com.hanialjti.allchat.presentation.ui.toCreateEntityScreen
 import timber.log.Timber
 
 @Composable
 fun ConversationsScreen(
-    navController: NavHostController,
-    viewModel: ConversationsViewModel = getViewModel()
+    navController: NavHostController, viewModel: ConversationsViewModel = getViewModel()
 ) {
 
-    val uiState by remember(viewModel) {
-        viewModel.uiState
-    }.collectAsState()
+    val contacts = remember(viewModel) {
+        viewModel.contacts
+    }.collectAsLazyPagingItems()
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column {
-            Text(
-                text = "Chats",
+            Text(text = "Chats",
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colors.primary,
                 fontSize = 36.sp,
@@ -62,8 +62,7 @@ fun ConversationsScreen(
                     .padding(top = 25.dp, bottom = 25.dp, start = 36.dp)
                     .clickable {
                         viewModel.createChatRoom()
-                    }
-            )
+                    })
 
             Spacer(
                 modifier = Modifier
@@ -75,16 +74,18 @@ fun ConversationsScreen(
             )
 
             ConversationList(
-                conversations = uiState.contacts
+                conversations = contacts
             ) { conversation ->
                 Timber.d(conversation.id)
-                navController.toChatScreen(conversation.id, conversation.isGroupChat)
+                conversation.id?.let {
+                    navController.toChatScreen(conversation.id, conversation.isGroupChat)
+                }
             }
 
         }
 
         FloatingActionButton(
-            onClick = { navController.toAddNewContactScreen() },
+            onClick = { navController.toCreateEntityScreen() },
             modifier = Modifier
                 .align(BottomEnd)
                 .padding(20.dp)
@@ -97,27 +98,25 @@ fun ConversationsScreen(
 
 @Composable
 fun ConversationList(
-    conversations: List<Contact>,
-    onConversationClicked: (Contact) -> Unit
+    conversations: LazyPagingItems<Contact>, onConversationClicked: (Contact) -> Unit
 ) {
 
     LazyColumn(
-        horizontalAlignment = CenterHorizontally,
-        contentPadding = PaddingValues(bottom = 80.dp)
+        horizontalAlignment = CenterHorizontally, contentPadding = PaddingValues(bottom = 80.dp)
     ) {
         items(
-            count = conversations.size,
-            key = { conversations[it].id }
+            count = conversations.itemCount
         ) { index ->
 
             val conversation = conversations[index]
 
-            ConversationItem(
-                modifier = Modifier.animateItemPlacement(),
-                contact = conversation
-            ) {
-                onConversationClicked(conversation)
-            }
+            if (conversation != null) {
+                ConversationItem(
+                    modifier = Modifier.animateItemPlacement(), contact = conversation
+                ) {
+                    onConversationClicked(conversation)
+                }
+            } else PlaceholderConversation()
 
         }
 
@@ -127,17 +126,13 @@ fun ConversationList(
 @OptIn(ExperimentalAnimationApi::class)
 @Composable
 fun ConversationItem(
-    contact: Contact,
-    modifier: Modifier = Modifier,
-    onConversationClicked: () -> Unit
+    contact: Contact, modifier: Modifier = Modifier, onConversationClicked: () -> Unit
 ) {
-    Row(
-        modifier = modifier
-            .clickable { onConversationClicked() }
-            .padding(horizontal = 36.dp, vertical = 12.dp)
-            .fillMaxWidth(),
-        verticalAlignment = CenterVertically
-    ) {
+    Row(modifier = modifier
+        .clickable { onConversationClicked() }
+        .padding(horizontal = 36.dp, vertical = 12.dp)
+        .fillMaxWidth(),
+        verticalAlignment = CenterVertically) {
 
         Box(modifier = Modifier) {
 
@@ -168,30 +163,36 @@ fun ConversationItem(
         ) {
             contact.name?.let {
                 Text(
-                    text = it,
-                    color = MaterialTheme.colors.primary,
-                    fontWeight = FontWeight.Bold
+                    text = it, color = MaterialTheme.colors.primary, fontWeight = FontWeight.Bold
                 )
             }
 
             contact.content?.let {
-                ConversationContentText(
-                    text = it.text.asString(),
-                    color = MaterialTheme.colors.primary,
-                    fontWeight = if (it is ContactInfo.LastMessage && !it.read) FontWeight.Bold else FontWeight.Normal
-                )
+                Row {
+                    ConversationContentText(
+                        text = it.text.asString(),
+                        color = MaterialTheme.colors.primary,
+                        fontWeight = if (it is ContactContent.LastMessage && !it.read) FontWeight.Bold else FontWeight.Normal
+                    )
+                    Box(modifier = Modifier.height(25.dp)) {
+                        if (contact.lastMessage?.isSentByMe == true) {
+                            contact.lastMessage.status.let { status ->
+                                MessageStatusIcon(messageStatus = status)
+                            }
+                        }
+                    }
+                }
             }
 
         }
 
         Column(
-            horizontalAlignment = CenterHorizontally,
-            modifier = Modifier.padding(end = 10.dp)
+            horizontalAlignment = CenterHorizontally, modifier = Modifier.padding(end = 10.dp)
         ) {
 
-            contact.lastUpdated?.let { lastUpdated ->
+            contact.lastMessage?.timestamp?.let { lastUpdated ->
                 Text(
-                    text = lastUpdated.formatTimestamp(TWO_DIGIT_FORMAT),
+                    text = lastUpdated.asString(TWO_DIGIT_FORMAT),
                     color = MaterialTheme.colors.primary,
                     modifier = Modifier
                 )
@@ -222,17 +223,15 @@ fun ConversationItem(
 
 @Composable
 fun ConversationContentText(
-    modifier: Modifier = Modifier,
-    text: String,
-    color: Color,
-    fontWeight: FontWeight
+    text: String, color: Color, fontWeight: FontWeight, modifier: Modifier = Modifier,
 ) {
     Text(
         text = text,
         color = color,
         fontWeight = fontWeight,
         maxLines = 2,
-        overflow = TextOverflow.Ellipsis
+        overflow = TextOverflow.Ellipsis,
+        modifier = modifier
     )
 }
 
@@ -241,8 +240,7 @@ fun PlaceholderConversation() {
     Row(
         modifier = Modifier
             .padding(15.dp)
-            .fillMaxWidth(),
-        verticalAlignment = CenterVertically
+            .fillMaxWidth(), verticalAlignment = CenterVertically
     ) {
 
         Box(

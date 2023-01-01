@@ -2,7 +2,8 @@ package com.hanialjti.allchat
 
 import android.app.Application
 import com.hanialjti.allchat.data.remote.ConnectionType
-import com.hanialjti.allchat.data.remote.xmpp.XmppConnectionConfig
+import com.hanialjti.allchat.data.remote.xmpp.model.PingConfigurations
+import com.hanialjti.allchat.data.remote.xmpp.model.XmppConnectionConfig
 import com.hanialjti.allchat.di.AllChat
 import org.jivesoftware.smack.android.AndroidSmackInitializer
 import timber.log.Timber
@@ -18,7 +19,8 @@ class AllChatApplication: Application() {
                 XmppConnectionConfig(
                     host = "192.168.0.42",
                     domain = "localhost",
-                    port = 5222
+                    port = 5222,
+                    pingConfigurations = PingConfigurations.EnablePingMessages(15)
                 )
             )
         )
@@ -28,6 +30,11 @@ class AllChatApplication: Application() {
         if (Timber.forest().isEmpty()) {
             plant(DebugTree())
         }
+    }
+
+    override fun onTerminate() {
+        super.onTerminate()
+        AllChat.stop()
     }
 }
 

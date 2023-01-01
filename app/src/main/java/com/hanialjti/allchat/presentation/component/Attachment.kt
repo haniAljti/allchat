@@ -2,7 +2,7 @@ package com.hanialjti.allchat.presentation.component
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import com.hanialjti.allchat.models.Attachment
+import com.hanialjti.allchat.presentation.chat.Attachment
 
 @Composable
 fun Attachment(

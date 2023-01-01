@@ -9,10 +9,7 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalContext
-import com.hanialjti.allchat.models.Attachment
-import com.hanialjti.allchat.models.defaultAttachmentName
-import com.hanialjti.allchat.data.local.room.entity.Media
-import com.hanialjti.allchat.sdk26AndUp
+import com.hanialjti.allchat.common.utils.sdk26AndUp
 import com.hanialjti.allchat.common.utils.createFileInInternalStorage
 import com.hanialjti.allchat.common.utils.currentTimestamp
 import kotlinx.coroutines.CoroutineScope
@@ -42,7 +39,7 @@ class MediaRecorderState(
         coroutine.launch(Dispatchers.IO) {
             mediaOutputFile = context.createFileInInternalStorage(
                 "AC_$currentTimestamp",
-                Media.Type.Audio
+                Attachment.Type.Audio
             )
             mediaOutputFile?.createNewFile()
 

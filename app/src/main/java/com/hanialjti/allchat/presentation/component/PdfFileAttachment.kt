@@ -14,7 +14,7 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import com.hanialjti.allchat.R
-import com.hanialjti.allchat.models.Attachment
+import com.hanialjti.allchat.presentation.chat.Attachment
 
 @Composable
 fun PdfFileAttachment(
@@ -35,6 +35,6 @@ fun PdfFileAttachment(
             colorFilter = ColorFilter.tint(Color.White),
             modifier = Modifier.padding(end = 10.dp)
         )
-        Text(text = pdf.name, color = Color.White)
+        pdf.displayName?.let { Text(text = it, color = Color.White) }
     }
 }

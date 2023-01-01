@@ -2,9 +2,6 @@ package com.hanialjti.allchat.presentation.viewmodels
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.hanialjti.allchat.data.local.room.entity.ConversationAndUser
-import com.hanialjti.allchat.data.local.room.entity.Conversation
-import com.hanialjti.allchat.data.local.room.entity.User
 import com.hanialjti.allchat.data.repository.ConversationRepository
 import com.hanialjti.allchat.data.repository.UserRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -37,21 +34,22 @@ class AddContactViewModel constructor(
             val nickname = _uiState.value.nickname
             val owner = _uiState.value.owner
 
+            //TODO
             owner?.let {
-                val conversation = ConversationAndUser(
-                    conversation = Conversation(
-                        id = id,
-                        isGroupChat = false,
-                        name = nickname,
-                        to = id,
-                        from = owner
-                    ),
-                    user = User(
-                        id = id,
-                        name = nickname
-                    )
-                )
-                conversationRepository.insertConversationAndUser(conversation)
+//                val conversation = ConversationAndUser(
+//                    conversationEntity = ContactEntity(
+////                        id = id,
+//                        isGroupChat = false,
+//                        name = nickname,
+//                        to = id,
+//                        from = owner
+//                    ),
+//                    user = UserEntity(
+//                        id = id,
+//                        name = nickname
+//                    )
+//                )
+//                conversationRepository.insertConversationAndUser(conversation)
             }
 
         }

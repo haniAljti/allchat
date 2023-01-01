@@ -22,6 +22,7 @@
     <string name="separator_last_month">Last Month</string>
     <string name="separator_last_year">Last Year</string>
     <string name="separator_other_date_pattern">d MMMM yyyy</string>
+    <string name="separator_new_messages">New Messages</string>
 
     //Last Online
     <string name="today">Today</string>

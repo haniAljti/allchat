@@ -1,31 +1,42 @@
 package com.hanialjti.allchat.presentation
 
 import android.app.Activity
-import androidx.lifecycle.DefaultLifecycleObserver
-import androidx.lifecycle.LifecycleOwner
-import com.hanialjti.allchat.data.local.datastore.UserPreferencesManager
+import androidx.lifecycle.*
 import com.hanialjti.allchat.data.remote.ConnectionManager
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.flow.collectLatest
+import com.hanialjti.allchat.data.remote.model.Presence
+import com.hanialjti.allchat.data.repository.ConversationRepository
+import com.hanialjti.allchat.data.repository.IChatRepository
 import kotlinx.coroutines.launch
+import timber.log.Timber
 
 class ConnectionLifeCycleObserver(
     private val connectionManager: ConnectionManager,
-    private val userPreferencesManager: UserPreferencesManager,
-    private val applicationScope: CoroutineScope
-): DefaultLifecycleObserver {
+    private val chatRepository: IChatRepository,
+    private val conversationRepository: ConversationRepository
+) : DefaultLifecycleObserver {
     private var isInBackground = true
+
+    override fun onCreate(owner: LifecycleOwner) {
+        owner.lifecycleScope.launch {
+            owner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                Timber.d("listening for messages...")
+                chatRepository.listenForMessageUpdates()
+            }
+        }
+        owner.lifecycleScope.launch {
+            owner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                Timber.d("listening for chat updates...")
+                conversationRepository.listenForConversationUpdates()
+            }
+        }
+    }
 
     override fun onResume(owner: LifecycleOwner) {
         if (owner is Activity && !owner.isChangingConfigurations && isInBackground) {
             isInBackground = false
-            applicationScope.launch {
-                userPreferencesManager.userCredentials
-                    .collectLatest { userCredentials ->
-                        if (userCredentials != null) {
-                            connectionManager.connect(userCredentials)
-                        }
-                    }
+
+            owner.lifecycleScope.launch {
+                connectionManager.onResume()
             }
         }
     }
@@ -35,7 +46,9 @@ class ConnectionLifeCycleObserver(
             is Activity -> {
                 if (!owner.isChangingConfigurations) {
                     isInBackground = true
-                    applicationScope.launch { connectionManager.disconnect() }
+                    owner.lifecycleScope.launch {
+                        connectionManager.onPause()
+                    }
                 }
             }
         }

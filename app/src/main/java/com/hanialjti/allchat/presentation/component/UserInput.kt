@@ -23,7 +23,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import coil.compose.rememberAsyncImagePainter
 import com.hanialjti.allchat.R
-import com.hanialjti.allchat.models.Attachment
+import com.hanialjti.allchat.presentation.chat.Attachment
 import com.hanialjti.allchat.presentation.ui.theme.Gray
 import com.hanialjti.allchat.presentation.ui.theme.Green
 import kotlinx.coroutines.delay

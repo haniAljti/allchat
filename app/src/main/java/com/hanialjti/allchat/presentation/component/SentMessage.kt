@@ -6,25 +6,27 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.Icon
 import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Text
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Color.Companion.Green
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import com.hanialjti.allchat.R
-import com.hanialjti.allchat.models.UiMessage
-import com.hanialjti.allchat.data.local.room.entity.Status
+import com.hanialjti.allchat.data.model.MessageItem
+import com.hanialjti.allchat.data.model.MessageStatus
 import com.hanialjti.allchat.presentation.chat.MessageTime
 import com.hanialjti.allchat.presentation.chat.imageBottomCornerRadius
-import com.hanialjti.allchat.presentation.ui.theme.Green
+import com.hanialjti.allchat.presentation.ui.theme.Green50
 import com.hanialjti.allchat.presentation.ui.theme.SentMessageGradiant
 
 @Composable
 fun SentMessage(
-    message: UiMessage,
-    lastMessageFromSameSender: Boolean,
+    message: MessageItem.MessageData,
+    nextMessage: MessageItem?,
+    previousMessage: MessageItem?,
     onResumeAudio: () -> Unit,
     onPauseAudio: () -> Unit,
     onAudioSeekValueChanged: (Int) -> Unit,
@@ -43,9 +45,13 @@ fun SentMessage(
                 timestamp = message.timestamp,
                 modifier = Modifier.padding(horizontal = 20.dp)
             )
-            message.status?.let { messageStatus ->
-                MessageStatusIcon(messageStatus = messageStatus)
-            }
+            MessageStatusIcon(messageStatus = message.status)
+        }
+
+        val isNextMessageFromSameSender by remember {
+            mutableStateOf(
+                nextMessage == null || nextMessage is MessageItem.MessageData && nextMessage.senderId == message.senderId
+            )
         }
 
         Column(
@@ -55,7 +61,7 @@ fun SentMessage(
                     brush = SentMessageGradiant,
                     shape = RoundedCornerShape(
                         topStart = 15.dp,
-                        topEnd = if (lastMessageFromSameSender) 0.dp else 15.dp,
+                        topEnd = if (isNextMessageFromSameSender) 0.dp else 15.dp,
                         bottomStart = 15.dp
                     )
                 )
@@ -69,7 +75,7 @@ fun SentMessage(
                     attachment = message.attachment,
                     modifier = modifier.clip(
                         RoundedCornerShape(
-                            topEnd = if (lastMessageFromSameSender) 2.dp else 15.dp,
+                            topEnd = if (isNextMessageFromSameSender) 2.dp else 15.dp,
                             topStart = 15.dp,
                             bottomEnd = 3.dp,
                             bottomStart = imageBottomCornerRadius(message.body.isNullOrEmpty())
@@ -97,33 +103,33 @@ fun SentMessage(
 }
 
 @Composable
-fun MessageStatusIcon(messageStatus: Status) {
+fun MessageStatusIcon(messageStatus: MessageStatus) {
     when (messageStatus) {
-        Status.Pending -> {
+        MessageStatus.Pending -> {
             MessageStatusIcon(
                 iconRes = R.drawable.ic_pending,
                 tint = MaterialTheme.colors.primary
             )
         }
-        Status.Sent -> {
+        MessageStatus.Sent -> {
             MessageStatusIcon(
                 iconRes = R.drawable.ic_sent,
                 tint = MaterialTheme.colors.primary
             )
         }
-        Status.Acknowledged -> {
+        MessageStatus.Delivered -> {
             MessageStatusIcon(
                 iconRes = R.drawable.ic_acknowledged,
                 tint = MaterialTheme.colors.primary
             )
         }
-        Status.Seen -> {
+        MessageStatus.Seen -> {
             MessageStatusIcon(
                 iconRes = R.drawable.ic_acknowledged,
-                tint = Green
+                tint = Color(0xFF26DBB5)
             )
         }
-        Status.Error -> {
+        MessageStatus.Error -> {
             MessageStatusIcon(
                 iconRes = R.drawable.ic_error,
                 tint = Color.Red
@@ -139,6 +145,7 @@ fun MessageStatusIcon(
     tint: Color
 ) {
     Icon(
+        modifier = modifier,
         painter = painterResource(id = iconRes),
         tint = tint,
         contentDescription = null
@@ -152,8 +159,9 @@ fun PlaceHolderMessage() {
 
     Box(
         modifier = Modifier
-            .height(50.dp)
             .padding(end = 20.dp)
+            .height(40.dp)
+            .fillMaxWidth()
             .background(
                 color = Color.Gray,
                 shape = RoundedCornerShape(15.dp)

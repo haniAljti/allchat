@@ -5,8 +5,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.Preview
+import com.hanialjti.allchat.data.model.MessageItem
 import com.hanialjti.allchat.presentation.component.ReceivedMessage
-import com.hanialjti.allchat.models.UiMessage
 
 val SentMessageGradiant = Brush.linearGradient(
     listOf(Color(0xFF26DBB5), Color(0xFF71BCAC)),
@@ -24,11 +24,30 @@ val ReceivedMessageGradiant = Brush.radialGradient(
 @Composable
 fun PreviewReceivedMessageGradiant() {
     ReceivedMessage(
-        message = UiMessage(
+        message = MessageItem.MessageData(
             body = "Hi\nksdkfm",
-            id = 1
+            id = "1",
+            attachment = null,
+            senderId = "2",
+            senderImage = null,
+            senderName = null
         ),
-        lastMessageFromSameSender = false,
+        nextMessage = MessageItem.MessageData(
+            body = "Hi\nksdkfm",
+            id = "2",
+            attachment = null,
+            senderId = "2",
+            senderImage = null,
+            senderName = null
+        ),
+        previousMessage = MessageItem.MessageData(
+            body = "Hi\nksdkfm",
+            id = "3",
+            attachment = null,
+            senderId = "2",
+            senderImage = null,
+            senderName = null
+        ),
         onResumeAudio = {  },
         onPauseAudio = {  },
         onAudioSeekValueChanged = {  },

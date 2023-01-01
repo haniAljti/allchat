@@ -14,7 +14,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.res.ResourcesCompat
 import com.hanialjti.allchat.R
-import com.hanialjti.allchat.models.Attachment
+import com.hanialjti.allchat.presentation.chat.Attachment
 import com.hanialjti.allchat.presentation.chat.AudioPlayBackButton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -38,7 +38,7 @@ fun AudioAttachment(
     val coroutine = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
-        coroutine.launch { animatedValue.snapTo((lastTrackPosition * 100 / recording.duration.toFloat())) }
+        coroutine.launch { animatedValue.snapTo((lastTrackPosition * 100 / (recording.duration?.toFloat() ?: 1f))) }
     }
 
     LaunchedEffect(isPlaying, isActiveMessage, animatedValue) {
@@ -48,7 +48,7 @@ fun AudioAttachment(
             animatedValue.animateTo(
                 targetValue = 100f,
                 animationSpec = FloatTweenSpec(
-                    recording.duration - ((recording.duration * animatedValue.value).toInt() / 100),
+                    (recording.duration ?: 1).toInt() - (((recording.duration ?: 1) * animatedValue.value).toInt() / 100),
                     0,
                     LinearEasing
                 )
@@ -106,7 +106,7 @@ fun AudioAttachment(
                             coroutine.launch {
                                 animatedValue.snapTo(progress)
                                 onSeekValueChanged(
-                                    ((recording.duration * animatedValue.value).toInt() / 100)
+                                    (((recording.duration ?: 1) * animatedValue.value).toInt() / 100)
                                 )
                             }
                         }
