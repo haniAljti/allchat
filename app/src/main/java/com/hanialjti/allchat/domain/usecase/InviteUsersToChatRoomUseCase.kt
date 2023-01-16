@@ -13,7 +13,7 @@ class InviteUsersToChatRoomUseCase(
         userRepository.loggedInUser.first()?.let { loggedInUser ->
             users.forEach {
                 conversationRepository.inviteUserToChatRoom(
-                    it, conversationId, loggedInUser.id
+                    it, conversationId, loggedInUser
                 )
             }
         }

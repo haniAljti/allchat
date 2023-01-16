@@ -1,10 +1,13 @@
 package com.hanialjti.allchat.data.local.room.entity
 
 import androidx.room.ColumnInfo
-import com.hanialjti.allchat.data.model.Media
+import androidx.room.Entity
+import androidx.room.PrimaryKey
 import com.hanialjti.allchat.presentation.chat.Attachment
 
 data class AttachmentEntity(
+    @PrimaryKey(autoGenerate = true)
+    val id: Long = 0,
     @ColumnInfo(name = "url")
     val url: String? = null,
     @ColumnInfo(name = "display_name")

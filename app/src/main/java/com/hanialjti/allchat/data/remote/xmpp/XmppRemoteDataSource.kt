@@ -1,11 +1,12 @@
 package com.hanialjti.allchat.data.remote.xmpp
 
 import com.hanialjti.allchat.data.local.room.entity.MessageEntity
-import com.hanialjti.allchat.data.model.*
+import com.hanialjti.allchat.data.model.Marker
+import com.hanialjti.allchat.data.model.MessageStatus
+import com.hanialjti.allchat.data.model.MessageType
+import com.hanialjti.allchat.data.model.User
 import com.hanialjti.allchat.data.remote.MessageRemoteDataSource
-import com.hanialjti.allchat.data.remote.model.CallResult
-import com.hanialjti.allchat.data.remote.model.MessagePage
-import com.hanialjti.allchat.data.remote.model.RemoteMessage
+import com.hanialjti.allchat.data.remote.model.*
 import com.hanialjti.allchat.data.remote.xmpp.model.AvatarDataExtensionElement
 import com.hanialjti.allchat.data.remote.xmpp.model.ChatMarkerWrapper.Companion.toMarker
 import com.hanialjti.allchat.data.remote.xmpp.model.ChatMarkerWrapper.Companion.toMessageStatus
@@ -32,12 +33,11 @@ import org.jivesoftware.smackx.carbons.packet.CarbonExtension
 import org.jivesoftware.smackx.chat_markers.ChatMarkersListener
 import org.jivesoftware.smackx.chat_markers.ChatMarkersManager
 import org.jivesoftware.smackx.chat_markers.element.ChatMarkersElements
-import org.jivesoftware.smackx.chatstates.ChatStateListener
-import org.jivesoftware.smackx.chatstates.ChatStateManager
 import org.jivesoftware.smackx.delay.packet.DelayInformation
 import org.jivesoftware.smackx.hints.element.StoreHint
 import org.jivesoftware.smackx.mam.MamManager
 import org.jivesoftware.smackx.muc.MultiUserChatManager
+import org.jivesoftware.smackx.muc.packet.GroupChatInvitation
 import org.jivesoftware.smackx.offline.OfflineMessageManager
 import org.jivesoftware.smackx.pubsub.Item
 import org.jivesoftware.smackx.pubsub.PayloadItem
@@ -59,38 +59,18 @@ class XmppRemoteDataSource(
 ) : MessageRemoteDataSource {
 
     private val mamManager = MamManager.getInstanceFor(connection)
-    private var pubSubManager =
-        PubSubManager.getInstanceFor(connection, JidCreate.bareFrom("hani@localhost"))
+    private var pubSubManager = PubSubManager.getInstanceFor(
+        connection,
+        JidCreate.bareFrom("hani@localhost")
+    )
     private val chatManager = ChatManager.getInstanceFor(connection)
     private val chatMarkersManager = ChatMarkersManager.getInstanceFor(connection)
-    private val chatStateManager = ChatStateManager.getInstance(connection)
     private val carbonManager = CarbonManager.getInstanceFor(connection)
     private val receiptManager = DeliveryReceiptManager.getInstanceFor(connection)
     private val mucManager = MultiUserChatManager.getInstanceFor(connection)
     private val offlineMessageManager = OfflineMessageManager.getInstanceFor(connection)
 
     private val messagesWaitingForAcknowledgment: MutableList<String> = mutableListOf()
-
-//    private val _messages = MutableSharedFlow<RemoteMessage>()
-//    val messages = _messages.shareIn()
-
-    override suspend fun updateMyChatState(chatState: ChatState) {
-        val smackChatState = when (chatState) {
-            is ChatState.Composing -> org.jivesoftware.smackx.chatstates.ChatState.composing
-            is ChatState.Active -> org.jivesoftware.smackx.chatstates.ChatState.active
-            is ChatState.Paused -> org.jivesoftware.smackx.chatstates.ChatState.paused
-            is ChatState.Inactive -> org.jivesoftware.smackx.chatstates.ChatState.inactive
-        }
-        try {
-            chatStateManager.setCurrentState(
-                smackChatState,
-                chatManager.chatWith(chatState.conversation.asJid().asEntityBareJidIfPossible())
-            )
-
-        } catch (e: Exception) {
-            Timber.e(e)
-        }
-    }
 
     private fun observeDeliveryReceipts() = callbackFlow {
         val deliveryReceiptListener = ReceiptReceivedListener { from, to, id, receipt ->
@@ -163,18 +143,33 @@ class XmppRemoteDataSource(
             Timber.d("New carbon copy direction: $direction, carbon: $carbonCopy, wrappingMessage: $wrappingMessage ")
 
             if (carbonCopy.isMessage() && carbonCopy.stanzaId != null) {
-                launch {
-                    send(
-                        RemoteMessage(
-                            id = carbonCopy.stanzaId,
-                            body = if (carbonCopy.isMessage()) carbonCopy.body else null,
-                            chatId = if (direction == CarbonExtension.Direction.sent) carbonCopy.toAsString() else carbonCopy.fromAsString(),
-                            type = MessageType.Chat, // since group chat messages should not be carbon copied
-                            sender = carbonCopy.fromAsString(),
-                            thread = carbonCopy.thread,
-                            messageStatus = if (direction == CarbonExtension.Direction.sent) MessageStatus.Sent else MessageStatus.Delivered
+                if (carbonCopy.isMucInvitation()) {
+                    if (direction == CarbonExtension.Direction.received) {
+                        val invitation = carbonCopy.getExtension(GroupChatInvitation.NAMESPACE) as GroupChatInvitation
+                        launch {
+                            send(
+                                RemoteGroupInvitation(
+                                    id = carbonCopy.stanzaId,
+                                    by = carbonCopy.fromAsString(),
+                                    chatId = invitation.roomAddress
+                                )
+                            )
+                        }
+                    }
+                } else {
+                    launch {
+                        send(
+                            RemoteMessage(
+                                id = carbonCopy.stanzaId,
+                                body = if (carbonCopy.isMessage()) carbonCopy.body else null,
+                                chatId = if (direction == CarbonExtension.Direction.sent) carbonCopy.toAsString() else carbonCopy.fromAsString(),
+                                type = MessageType.Chat, // since group chat messages should not be carbon copied
+                                sender = carbonCopy.fromAsString(),
+                                thread = carbonCopy.thread,
+                                messageStatus = if (direction == CarbonExtension.Direction.sent) MessageStatus.Sent else MessageStatus.Delivered
+                            )
                         )
-                    )
+                    }
                 }
             }
         }
@@ -184,22 +179,6 @@ class XmppRemoteDataSource(
         awaitClose {
             carbonManager.removeCarbonCopyReceivedListener(carbonListener)
         }
-    }
-
-    fun observeChatStates() = callbackFlow {
-        val chatStateListener = ChatStateListener { _, state, message ->
-            val conversation = message.from.asBareJid().toString()
-            val from = message.from.localpartOrNull?.toString()
-
-            from?.let {
-                launch { send(state.toConversationState(conversation, it)) }
-            }
-
-        }
-
-        chatStateManager.addChatStateListener(chatStateListener)
-
-        awaitClose { chatStateManager.removeChatStateListener(chatStateListener) }
     }
 
     private suspend fun MamManager.MamQueryArgs.getMessagePage(): MessagePage =
@@ -299,7 +278,6 @@ class XmppRemoteDataSource(
         return try {
             val pageArgs = MamManager.MamQueryArgs
                 .builder()
-                .queryLastPage()
                 .setResultPageSize(pageSize)
                 .apply {
                     limitResultsToJid(chatId.asJid())
@@ -368,7 +346,7 @@ class XmppRemoteDataSource(
         }
     }
 
-    override fun listenForMessageChanges(): Flow<RemoteMessage> = merge(
+    override fun listenForMessageChanges(): Flow<RemoteMessageItem> = merge(
         observeOneOnOneMessages(),
         observeChatMarkers(),
         observeAcknowledgmentMessages(),
@@ -381,21 +359,30 @@ class XmppRemoteDataSource(
 
         val listener = StanzaListener { stanza ->
             Timber.d("Received a group message $stanza")
+
             if (stanza.stanzaId == null) {
                 Timber.e("Received message has no stanzaId and therefore can not be saved to local storage")
                 return@StanzaListener
             }
             if (stanza is Message) {
+                val chatMarker = stanza.wrapMarker()
                 launch {
                     send(
                         RemoteMessage(
-                            id = stanza.stanzaId,
+                            id = chatMarker?.stanzaId ?: stanza.stanzaId,
                             body = if (stanza.isMessage()) stanza.body else null,
                             chatId = stanza.fromAsString(),
-                            sender = stanza.from.resourceOrNull.toString().asJid().asBareJid().toString(),
+                            sender = stanza.from.resourceOrNull.toString().asJid().asBareJid()
+                                .toString(),
                             type = MessageType.GroupChat,
                             thread = stanza.thread,
-                            messageStatus = MessageStatus.Sent
+                            messageStatus = chatMarker?.toMessageStatus() ?: MessageStatus.Sent,
+                            markers = chatMarker?.toMarker()?.let {
+                                mutableMapOf(
+                                    stanza.from.resourceOrNull.toString().asJid().asBareJid()
+                                        .toString() to it
+                                )
+                            } ?: mutableMapOf()
                         )
                     )
                 }
@@ -421,6 +408,7 @@ class XmppRemoteDataSource(
 
     suspend fun listenForUserImageUpdates(user: User) = callbackFlow {
 
+
         pubSubManager = PubSubManager.getInstanceFor(connection, JidCreate.bareFrom(user.id))
 
         val itemEventListener = ItemEventListener<Item> {
@@ -429,7 +417,7 @@ class XmppRemoteDataSource(
                 if (item is PayloadItem<*>) {
                     if (item.payload is AvatarDataExtensionElement) {
                         val avatarPayload = item.payload as AvatarDataExtensionElement
-                        launch { send(user.copy(image = avatarPayload.data)) }
+                        launch { send(user) }
                     }
                 }
             }

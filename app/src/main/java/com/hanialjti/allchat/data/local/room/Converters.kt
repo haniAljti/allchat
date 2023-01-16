@@ -1,6 +1,7 @@
 package com.hanialjti.allchat.data.local.room
 
 import androidx.room.TypeConverter
+import com.hanialjti.allchat.data.local.room.entity.*
 import com.hanialjti.allchat.data.model.*
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
@@ -13,16 +14,46 @@ class Converters {
     private val formatter = DateTimeFormatter.ISO_OFFSET_DATE_TIME
 
     @TypeConverter
+    fun imageAttachmentToString(image: ImageAttachment?) = Json.encodeToString(image)
+
+    @TypeConverter
+    fun imageAttachmentFromString(value: String): ImageAttachment? = Json.decodeFromString(value)
+
+    @TypeConverter
+    fun audioAttachmentToString(audio: AudioAttachment?) = Json.encodeToString(audio)
+
+    @TypeConverter
+    fun audioAttachmentFromString(value: String): AudioAttachment? = Json.decodeFromString(value)
+
+    @TypeConverter
+    fun locationAttachmentToString(location: LocationAttachment?) = Json.encodeToString(location)
+
+    @TypeConverter
+    fun locationAttachmentFromString(value: String): LocationAttachment? = Json.decodeFromString(value)
+
+    @TypeConverter
+    fun fileAttachmentToString(file: FileAttachment?) = Json.encodeToString(file)
+
+    @TypeConverter
+    fun fileAttachmentFromString(value: String): FileAttachment? = Json.decodeFromString(value)
+
+    @TypeConverter
+    fun messageSummaryToString(message: MessageSummary?) = Json.encodeToString(message)
+
+    @TypeConverter
+    fun messageSummaryFromString(value: String): MessageSummary? = Json.decodeFromString(value)
+
+    @TypeConverter
     fun setToString(set: Set<String>?) = set?.joinToString(",")
 
     @TypeConverter
     fun setFromString(set: String?): Set<String>? = set?.split(",")?.toSet()
 
     @TypeConverter
-    fun statesToString(map: Map<String, Contact.State>) = Json.encodeToString(map)
+    fun statesToString(map: Map<String, Participant.State>) = Json.encodeToString(map)
 
     @TypeConverter
-    fun statesFromString(map: String): Map<String, Contact.State> = Json.decodeFromString(map)
+    fun statesFromString(map: String): Map<String, Participant.State> = Json.decodeFromString(map)
 
     @TypeConverter
     fun markersToString(map: Map<String, Marker>?) = Json.encodeToString(map ?: mutableMapOf())
@@ -31,7 +62,7 @@ class Converters {
     fun markersFromString(map: String?): Map<String, Marker> = Json.decodeFromString(map ?: "{}")
 
     @TypeConverter
-    fun stateToString(state: Contact.State) = Json.encodeToString(state)
+    fun stateToString(state: Participant.State) = Json.encodeToString(state)
 
     @TypeConverter
     fun offsetDateTimeToString(dateTime: OffsetDateTime?) = dateTime?.format(formatter)
@@ -40,7 +71,7 @@ class Converters {
     fun offsetDateTimeFromString(dateTime: String?) = dateTime?.let { return@let formatter.parse(it, OffsetDateTime::from) }
 
     @TypeConverter
-    fun stateFromString(state: String): Contact.State = Json.decodeFromString(state)
+    fun stateFromString(state: String): Participant.State = Json.decodeFromString(state)
 
     @TypeConverter
     fun listToString(list: List<String>) = list.joinToString(",")
@@ -72,9 +103,8 @@ class Converters {
 
     @TypeConverter
     fun toRole(roleValue: Int?) = when (roleValue) {
-        0 -> Role.Admin
-        1 -> Role.Owner
-        else -> Role.Participant
+        0 -> Role.Participant
+        else -> Role.Admin
     }
 
     @TypeConverter

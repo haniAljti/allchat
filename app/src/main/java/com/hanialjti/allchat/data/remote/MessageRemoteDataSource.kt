@@ -1,16 +1,16 @@
 package com.hanialjti.allchat.data.remote
 
 import com.hanialjti.allchat.data.local.room.entity.MessageEntity
-import com.hanialjti.allchat.data.model.ChatState
 import com.hanialjti.allchat.data.model.Marker
 import com.hanialjti.allchat.data.remote.model.CallResult
 import com.hanialjti.allchat.data.remote.model.MessagePage
 import com.hanialjti.allchat.data.remote.model.RemoteMessage
+import com.hanialjti.allchat.data.remote.model.RemoteMessageItem
 import kotlinx.coroutines.flow.Flow
 
 interface MessageRemoteDataSource {
-    suspend fun updateMyChatState(chatState: ChatState)
-    fun listenForMessageChanges(): Flow<RemoteMessage>
+
+    fun listenForMessageChanges(): Flow<RemoteMessageItem>
     suspend fun updateMarkerForMessage(message: RemoteMessage, marker: Marker): CallResult<String>
 
     /**

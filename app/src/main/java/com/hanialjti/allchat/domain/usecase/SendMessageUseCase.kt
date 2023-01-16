@@ -29,11 +29,11 @@ class SendMessageUseCase(
         chatRepository.sendMessage(
             MessageEntity(
                 body = body,
-                attachment = attachment?.asAttachmentEntity(),
+//                attachment = attachment?.asAttachmentEntity(),
                 contactId = contactId,
                 type = if (isGroupChat) MessageType.GroupChat else MessageType.Chat,
-                ownerId = user.id,
-                senderId = user.id
+                ownerId = user,
+                senderId = user
             )
         )
     }

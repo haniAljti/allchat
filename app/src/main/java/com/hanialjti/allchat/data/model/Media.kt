@@ -20,8 +20,7 @@ data class Media(
         Video,
         Image,
         Audio,
-        Pdf,
-        Other
+        Pdf
     }
 }
 

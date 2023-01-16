@@ -11,7 +11,7 @@ class SyncMessagesUseCase(
 
     suspend operator fun invoke() {
         userRepository.connectedUser.firstOrNull()?.let { user ->
-            chatRepository.syncMessages(user.id)
+            chatRepository.syncMessages(user)
         }
     }
 }

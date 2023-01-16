@@ -49,5 +49,5 @@ class MainViewModel(
 
 data class MainUiState(
     val isLoggedIn: Boolean = false,
-    val loggedInUser: LoggedInUser? = null
+    val loggedInUser: String? = null
 )

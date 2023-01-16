@@ -14,6 +14,7 @@ import com.hanialjti.allchat.presentation.conversation.UiText
 import com.hanialjti.allchat.presentation.preview_attachment.PreviewAttachmentViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.datetime.toJavaLocalDateTime
 import timber.log.Timber
 
 class ChatViewModel(
@@ -35,8 +36,8 @@ class ChatViewModel(
     private var lastReadMessage: MessageItem.MessageData? = null
 
     fun updateLastReadMessage(lastReadMessage: MessageItem.MessageData) {
-        if (this.lastReadMessage == null || this.lastReadMessage != lastReadMessage && this.lastReadMessage?.timestamp?.isBefore(
-                lastReadMessage.timestamp
+        if (this.lastReadMessage == null || this.lastReadMessage != lastReadMessage && this.lastReadMessage?.timestamp?.toJavaLocalDateTime()?.isBefore(
+                lastReadMessage.timestamp.toJavaLocalDateTime()
             ) == true
         ) {
             Timber.d("lastReadMessage updated. New value = $lastReadMessage")
@@ -105,10 +106,7 @@ class ChatViewModel(
     }
 
     private suspend fun addUserToContacts() {
-        val userName = _chatUiState.value.name
-        val userImage = _chatUiState.value.image
-        val imageUrl = if (userImage is ContactImage.DynamicImage) userImage.imageUrl else null
-        addUserToContactsUseCase(conversationId, userName, imageUrl)
+        addUserToContactsUseCase(conversationId)
     }
 
     fun sendMessage() = viewModelScope.launch {

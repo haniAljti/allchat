@@ -1,5 +1,6 @@
 package com.hanialjti.allchat.data.remote.xmpp
 
+import android.content.Context
 import androidx.work.ListenableWorker
 import com.hanialjti.allchat.common.exception.NotAuthenticatedException
 import com.hanialjti.allchat.data.local.datastore.UserCredentials
@@ -10,17 +11,17 @@ import com.hanialjti.allchat.data.remote.model.Presence
 import com.hanialjti.allchat.data.remote.xmpp.model.XmppConnectionConfig
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.channels.awaitClose
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.callbackFlow
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.jivesoftware.smack.ConnectionListener
 import org.jivesoftware.smack.ReconnectionManager
 import org.jivesoftware.smack.XMPPConnection
+import org.jivesoftware.smack.roster.rosterstore.DirectoryRosterStore
 import org.jivesoftware.smack.tcp.XMPPTCPConnection
 import org.jivesoftware.smackx.bookmarks.BookmarkManager
+import org.jivesoftware.smackx.caps.EntityCapsManager
+import org.jivesoftware.smackx.caps.cache.SimpleDirectoryPersistentCache
 import org.jivesoftware.smackx.carbons.CarbonManager
 import org.jivesoftware.smackx.muc.MultiUserChatManager
 import org.jivesoftware.smackx.ping.PingManager
@@ -29,6 +30,7 @@ import timber.log.Timber
 
 class XmppConnectionManager(
     private val connection: XMPPTCPConnection,
+    private val appContext: Context,
     private val userPreferencesManager: UserPreferencesManager,
     private val dispatcher: CoroutineDispatcher,
     private val config: XmppConnectionConfig
@@ -42,24 +44,39 @@ class XmppConnectionManager(
     private val carbonManager = CarbonManager.getInstanceFor(connection)
     private val bookmarkManager = BookmarkManager.getBookmarkManager(connection)
     private val mucManager = MultiUserChatManager.getInstanceFor(connection)
+    private val entityCapsManager = EntityCapsManager.getInstanceFor(connection)
+    private val entityCapsPersistentCache = SimpleDirectoryPersistentCache(appContext.cacheDir)
 
     override fun getUsername() = connection.user?.asBareJid()?.toString()
 
+
     override fun getConfig() = config
+
+    override val loggedInUser = observeConnectivityStatus()
+        .map { connectionStatus ->
+            if (connectionStatus == ConnectionManager.Status.Connected) {
+                connection.user?.asBareJid()?.toString()
+            } else null
+        }
 
     private suspend fun joinAllChatRooms() {
         bookmarkManager.bookmarkedConferences.forEach {
-            if (it.isAutoJoin)
-            joinRoom(it.jid.asBareJid().toString(), connection.user.asBareJid().toString())
+            if (it.isAutoJoin) {
+                joinRoom(it.jid.asBareJid().toString(), connection.user.asBareJid().toString())
+            }
         }
     }
 
     private suspend fun joinRoom(roomId: String, myId: String) {
         val muc = mucManager.getMultiUserChat(roomId.asJid().asEntityBareJidIfPossible())
         if (!muc.isJoined) {
-            val history = muc.getEnterConfigurationBuilder(Resourcepart.from(myId))
-                .requestHistorySince(534776876).build()
-            muc.join(history)
+            try {
+                val history = muc.getEnterConfigurationBuilder(Resourcepart.from(myId))
+                    .requestHistorySince(534776876).build()
+                muc.join(history)
+            } catch (e: Exception) {
+                Timber.e(e)
+            }
         }
     }
 
@@ -109,9 +126,10 @@ class XmppConnectionManager(
 //        ClientStateIndicationManager.inactive(connection)
     }
 
-    override suspend fun unregisterWorker(worker: ListenableWorker): Unit = withContext(dispatcher) {
-        workers.remove(worker)
-    }
+    override suspend fun unregisterWorker(worker: ListenableWorker): Unit =
+        withContext(dispatcher) {
+            workers.remove(worker)
+        }
 
     override fun observeConnectivityStatus(): Flow<ConnectionManager.Status> = callbackFlow {
 
@@ -149,8 +167,10 @@ class XmppConnectionManager(
                         userCredentials.password
                     )
                 carbonManager.enableCarbons()
-            }
-            else throw NotAuthenticatedException("Credentials are null", null)
+                EntityCapsManager.setPersistentCache(entityCapsPersistentCache)
+                entityCapsManager.enableEntityCaps()
+                Timber.d("Are entity capabilities enabled: ${entityCapsManager.entityCapsEnabled()}")
+            } else throw NotAuthenticatedException("Credentials are null", null)
         }
     }
 

@@ -2,6 +2,7 @@ package com.hanialjti.allchat.di
 
 import androidx.room.Room
 import androidx.work.WorkManager
+import com.hanialjti.allchat.data.local.FileRepository
 import com.hanialjti.allchat.data.local.datastore.CryptoManager
 import com.hanialjti.allchat.data.local.datastore.UserPreferencesManager
 import com.hanialjti.allchat.data.local.room.AllChatLocalRoomDatabase
@@ -40,7 +41,7 @@ val appModule = module {
     single(qualifier = named(DispatcherQualifiers.Default)) {
         Dispatchers.Default
     }
-    factory(qualifier = named(DispatcherQualifiers.Io)) {
+    single(qualifier = named(DispatcherQualifiers.Io)) {
         Dispatchers.IO
     }
     single(qualifier = named(ScopeQualifiers.Application)) {
@@ -59,14 +60,29 @@ val appModule = module {
         UserPreferencesManager(androidContext())
     }
     single {
-        ConversationRepository(get(), get(), get(), get())
+        FileRepository(androidContext(), get(named(DispatcherQualifiers.Io)))
+    }
+    single {
+        ConversationRepository(
+            get(),
+            get(),
+            get(),
+            get(),
+            get(),
+            get(),
+            get(named(ScopeQualifiers.Application)),
+            get(named(DispatcherQualifiers.Io))
+        )
     }
     single<IChatRepository> {
         ChatRepository(
             get(),
             get(),
             get(),
-            get()
+            get(),
+            get(),
+            get(qualifier = named(ScopeQualifiers.Application)),
+            get(qualifier = named(DispatcherQualifiers.Io))
         )
     }
     single(createdAtStart = true) {
@@ -92,7 +108,7 @@ val appModule = module {
         CreateChatRoomViewModel(get())
     }
     single {
-        EditUserInfoViewModel()
+        EditUserInfoViewModel(get())
     }
     factory {
         ConversationsViewModel(get(), get(), get(), get(), get(), get())
@@ -143,7 +159,7 @@ val useCaseModule = module {
         ResetUnreadCounterUseCase(get())
     }
     single {
-        GetMessagesUseCase(get(), get())
+        GetMessagesUseCase(get())
     }
     single {
         GetContactInfoUseCase(get(), get())
@@ -152,13 +168,10 @@ val useCaseModule = module {
         CreateChatRoomUseCase(get(), get())
     }
     single {
-        AddUserToContactsUseCase(get(), get())
+        AddUserToContactsUseCase(get())
     }
     single {
         SendReadMarkerForMessageUseCase(get())
-    }
-    single {
-        GetMostRecentMessageUseCase(get(), get())
     }
     single {
         SyncChatsUseCase(get())

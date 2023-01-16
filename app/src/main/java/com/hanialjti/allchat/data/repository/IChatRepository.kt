@@ -6,9 +6,7 @@ import com.hanialjti.allchat.data.model.ChatState
 import com.hanialjti.allchat.data.model.MessageItem
 import com.hanialjti.allchat.data.remote.model.CallResult
 import com.hanialjti.allchat.data.remote.model.MessageQueryResult
-import com.hanialjti.allchat.data.remote.model.RemoteMessage
 import kotlinx.coroutines.flow.Flow
-import java.time.OffsetDateTime
 
 interface IChatRepository {
     suspend fun setMessagesAsRead(chatId: String)
@@ -28,7 +26,7 @@ interface IChatRepository {
     suspend fun getMessageByExternalId(externalMessageId: String): MessageEntity?
     fun observeLastMessageNotSentByOwner(owner: String, conversationId: String): Flow<MessageEntity>
     suspend fun sendMessage(message: MessageEntity)
-    fun messages(conversation: String, owner: String?): Flow<PagingData<MessageItem.MessageData>>
+    fun fetchMessagesFor(chatId: String): Flow<PagingData<MessageItem.MessageData>>
     suspend fun listenForMessageUpdates()
     suspend fun updateMyChatState(chatState: ChatState)
     suspend fun sendSeenMarkerForMessage(externalMessageId: String): CallResult<Boolean>

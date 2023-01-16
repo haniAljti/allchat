@@ -18,6 +18,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Alignment.Companion.BottomEnd
 import androidx.compose.ui.Alignment.Companion.Center
 import androidx.compose.ui.Alignment.Companion.CenterHorizontally
@@ -41,6 +42,7 @@ import com.hanialjti.allchat.presentation.component.MessageStatusIcon
 import com.hanialjti.allchat.presentation.ui.theme.Green
 import com.hanialjti.allchat.presentation.ui.toChatScreen
 import com.hanialjti.allchat.presentation.ui.toCreateEntityScreen
+import kotlinx.datetime.toJavaLocalDateTime
 import timber.log.Timber
 
 @Composable
@@ -53,13 +55,13 @@ fun ConversationsScreen(
     }.collectAsLazyPagingItems()
 
     Box(modifier = Modifier.fillMaxSize()) {
-        Column {
+        Column(horizontalAlignment = CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
             Text(text = "Chats",
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colors.primary,
-                fontSize = 36.sp,
+                fontSize = 20.sp,
                 modifier = Modifier
-                    .padding(top = 25.dp, bottom = 25.dp, start = 36.dp)
+                    .padding(top = 25.dp, bottom = 25.dp)
                     .clickable {
                         viewModel.createChatRoom()
                     })
@@ -192,7 +194,7 @@ fun ConversationItem(
 
             contact.lastMessage?.timestamp?.let { lastUpdated ->
                 Text(
-                    text = lastUpdated.asString(TWO_DIGIT_FORMAT),
+                    text = lastUpdated.toJavaLocalDateTime().asString(TWO_DIGIT_FORMAT),
                     color = MaterialTheme.colors.primary,
                     modifier = Modifier
                 )

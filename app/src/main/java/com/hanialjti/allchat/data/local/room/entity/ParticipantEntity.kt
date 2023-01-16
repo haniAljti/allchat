@@ -5,6 +5,7 @@ import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.ForeignKey.CASCADE
 import com.hanialjti.allchat.data.model.Contact
+import com.hanialjti.allchat.data.model.Participant
 import com.hanialjti.allchat.data.model.Role
 
 @Entity(
@@ -13,13 +14,13 @@ import com.hanialjti.allchat.data.model.Role
     foreignKeys = [
         ForeignKey(
             entity = ChatEntity::class,
-            parentColumns = arrayOf("external_id", "owner"),
-            childColumns = arrayOf("chat_id", "owner"),
+            parentColumns = arrayOf("id"),
+            childColumns = arrayOf("chat_id"),
             onDelete = CASCADE
         ),
         ForeignKey(
             entity = UserEntity::class,
-            parentColumns = arrayOf("external_id"),
+            parentColumns = arrayOf("id"),
             childColumns = arrayOf("user_id"),
             onDelete = CASCADE
         )
@@ -28,9 +29,8 @@ import com.hanialjti.allchat.data.model.Role
 data class ParticipantEntity(
     @ColumnInfo(name = "chat_id")
     val chatId: String,
-    val owner: String,
     @ColumnInfo(name = "user_id")
     val userId: String,
-    val state: Contact.State = Contact.State.Inactive,
-    val roles: List<Role> = listOf(Role.Participant)
+    val state: Participant.State = Participant.State.Inactive,
+    val role: Role = Role.Participant
 )

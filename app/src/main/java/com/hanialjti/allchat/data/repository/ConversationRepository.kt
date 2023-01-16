@@ -2,34 +2,45 @@ package com.hanialjti.allchat.data.repository
 
 import androidx.paging.Pager
 import androidx.paging.PagingConfig
+import androidx.paging.PagingData
 import androidx.paging.map
 import androidx.room.withTransaction
+import coil.Coil
+import coil.request.ImageRequest
+import coil.request.ImageResult
 import com.hanialjti.allchat.common.model.ListChange
+import com.hanialjti.allchat.data.local.FileRepository
 import com.hanialjti.allchat.data.local.room.AllChatLocalRoomDatabase
-import com.hanialjti.allchat.data.local.room.entity.ChatEntity
-import com.hanialjti.allchat.data.local.room.entity.ParticipantEntity
-import com.hanialjti.allchat.data.local.room.entity.UserEntity
-import com.hanialjti.allchat.data.local.room.model.asContact
-import com.hanialjti.allchat.data.remote.model.CallResult
+import com.hanialjti.allchat.data.local.room.entity.*
+import com.hanialjti.allchat.data.model.Avatar
+import com.hanialjti.allchat.data.model.Contact
 import com.hanialjti.allchat.data.remote.ChatRemoteDataSource
 import com.hanialjti.allchat.data.remote.ConnectionManager
-import com.hanialjti.allchat.data.remote.model.RemoteUserItem
-import com.hanialjti.allchat.data.remote.model.toUserEntity
+import com.hanialjti.allchat.data.remote.model.CallResult
 import com.hanialjti.allchat.data.tasks.ConversationTasksDataStore
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.withContext
 import timber.log.Timber
 
 class ConversationRepository constructor(
     private val localDataStore: AllChatLocalRoomDatabase,
     private val remoteDataStore: ChatRemoteDataSource,
     private val tasksDataStore: ConversationTasksDataStore,
-    private val connectionManager: ConnectionManager
+    private val connectionManager: ConnectionManager,
+    private val userRepository: UserRepository,
+    private val fileRepository: FileRepository,
+    private val externalScope: CoroutineScope,
+    private val dispatcher: CoroutineDispatcher
 ) {
 
     private val conversationDao = localDataStore.conversationDao()
     private val userDao = localDataStore.userDao()
+    private val avatarDao = localDataStore.avatarDao()
 
-    fun contacts(owner: String) = Pager(
+    private fun contacts(owner: String) = Pager(
         config = PagingConfig(pageSize = 30),
         pagingSourceFactory = { conversationDao.getContacts(owner) }
     ).flow.map {
@@ -38,8 +49,23 @@ class ConversationRepository constructor(
         }
     }
 
-    fun contact(conversationId: String, owner: String) =
-        conversationDao.getContact(conversationId, owner)?.asContact()
+    @OptIn(ExperimentalCoroutinesApi::class)
+    fun myContacts(): Flow<PagingData<Contact>> = connectionManager.loggedInUser.flatMapLatest {
+        it?.let { contacts(it) } ?: emptyFlow()
+    }
+
+    fun startListeners() {
+        remoteDataStore.startListeners()
+    }
+
+    fun stopListeners() {
+        remoteDataStore.stopListeners()
+    }
+
+    suspend fun contact(userId: String): Contact? = withContext(dispatcher) {
+        return@withContext conversationDao.getContact(userId)?.asContact()
+    }
+
 
     suspend fun resetUnreadCounter(conversationId: String) {
         conversationDao.resetUnreadCounter(conversationId)
@@ -52,40 +78,12 @@ class ConversationRepository constructor(
         val username =
             connectionManager.getUsername() ?: return CallResult.Error("user is not logged in!")
 
-        val conversationEntity = contact(roomExternalId, username)
+        val conversationEntity = contact(roomExternalId)
             ?: return CallResult.Error("conversation with id $roomExternalId could not be found.")
 
         return conversationEntity.name?.let { nickName ->
             remoteDataStore.createChatRoom(nickName, username)
         } ?: CallResult.Error("Room must have a name")
-    }
-
-    suspend fun createChatRoom(
-        roomName: String,
-        myId: String
-    ) {
-
-//        val conversation = ChatEntity(
-//            isGroupChat = true,
-//            participants = listOf(myId),
-//            admins = listOf(myId),
-//            name = roomName,
-//            owner = myId
-//        )
-
-//        val chatRoomLocalId = conversationDao.insert(conversation)[0]
-//
-//        tasksDataStore.createChatRoom(chatRoomLocalId.toInt())
-//        val result = remoteDataStore.createChatRoom(roomName, myId)
-//        if (result is CallResult.Success && result.value != null) {
-//            conversationDao.insert(
-//                ConversationEntity(
-//                    id = result.value,
-//                    isGroupChat = true,
-//
-//                )
-//            )
-//        }
     }
 
     suspend fun inviteUserToChatRoom(userId: String, conversationId: String, myId: String) {
@@ -96,29 +94,13 @@ class ConversationRepository constructor(
         conversationDao.insertOrIgnore(conversation)
     }
 
-//    suspend fun insertConversationAndUser(conversationAndUser: ConversationAndUser) =
-//        withContext(Dispatchers.IO) {
-//            localDataStore.withTransaction {
-//                conversationDao.upsert(conversationAndUser.conversationEntity)
-//                conversationAndUser.user?.let { user -> userDao.upsert(user) }
-//            }
-//            conversationAndUser.conversationEntity.from?.let {
-//                startConversation(
-//                    conversationAndUser.conversationEntity.id,
-//                    conversationAndUser.name,
-//                    conversationAndUser.conversationEntity.isGroupChat,
-//                    it
-//                )
-//            }
-//        }
-
     suspend fun syncChats() {
         connectionManager.getUsername()?.let { owner ->
             val chats = remoteDataStore.retrieveContacts()
             chats.forEach { remoteChat ->
                 localDataStore.withTransaction {
                     val chatEntity = ChatEntity(
-                        externalId = remoteChat.id,
+                        id = remoteChat.id,
                         owner = owner,
                         isGroupChat = remoteChat.isGroupChat,
                         name = remoteChat.name,
@@ -136,16 +118,15 @@ class ConversationRepository constructor(
                         if (!userDao.exists(remoteChat.id)) {
                             userDao.insertUser(
                                 UserEntity(
-                                    externalId = remoteChat.id,
-                                    ownerId = owner,
+                                    id = remoteChat.id,
                                     name = remoteChat.name
                                 )
                             )
                         }
 
-                        if (conversationDao.getParticipantCountForChat(remoteChat.id, owner) == 0) {
+                        if (conversationDao.getParticipantCountForChat(remoteChat.id) == 0) {
                             conversationDao.insertParticipants(
-                                ParticipantEntity(remoteChat.id, owner, remoteChat.id)
+                                ParticipantEntity(remoteChat.id, remoteChat.id)
                             )
                         }
 
@@ -155,69 +136,155 @@ class ConversationRepository constructor(
         } ?: Timber.e("User is not logged in!")
     }
 
-    suspend fun addContactEntry(
-        userId: String,
-        name: String,
-        image: String?,
-        owner: String,
-    ): CallResult<String> {
-        val conversationEntity = ChatEntity(
-            externalId = userId,
+    suspend fun addUserToContactList(userId: String): CallResult<String> {
+        val owner = connectionManager.getUsername()
+            ?: return CallResult.Error("User is not signed in")
+
+        val chat = createUserAndAddToContactList(userId, owner) ?: return CallResult.Error(
+            "An error occurred while trying to add user to contact list"
+        )
+
+        return remoteDataStore.addUserToContact(userId, chat.name ?: "AllChat User")
+    }
+
+    private suspend fun createUserAndAddToContactList(userId: String, owner: String): ChatEntity? =
+        localDataStore.withTransaction {
+
+            var chat = conversationDao.getConversationByRemoteId(userId)
+
+            if (chat != null) {
+                return@withTransaction chat
+            }
+
+            var user: UserEntity? = userDao.findById(userId)
+
+            val userInfoResult = userRepository.fetchUserInfo(userId)
+
+            if (userInfoResult is CallResult.Error) {
+                return@withTransaction null
+            }
+
+            val userInfo = (userInfoResult as CallResult.Success).data
+                ?: return@withTransaction null
+
+            val avatarUri = when (userInfo.user.avatar) {
+                is Avatar.Raw -> fileRepository.writeToInternalStorage(
+                    userInfo.user.avatar.bytes,
+                    userId
+                )
+                is Avatar.Url -> fileRepository.writeToInternalStorage(
+                    userInfo.user.avatar.imageUrl,
+                    userId
+                )
+                else -> null
+            }
+
+            avatarUri?.let {
+                val avatarEntity = AvatarEntity(
+                    userId = userId,
+                    cacheUri = avatarUri.toString(),
+                    hash = if (userInfo.user.avatar is Avatar.Raw) userInfo.user.avatar.hash else null
+                )
+                avatarDao.insertAvatar(avatarEntity)
+                avatarEntity
+            }
+
+            if (user == null) {
+
+                user = UserEntity(
+                    id = userId,
+                    name = userInfo.user.name,
+                    avatar = avatarUri?.toString(),
+                    isOnline = userInfo.presence.isOnline,
+                    lastOnline = userInfo.presence.lastOnline,
+                    status = userInfo.presence.status
+                )
+
+                userDao.insertUser(user)
+
+            }
+
+            chat = ChatEntity(
+                id = userId,
+                isGroupChat = false,
+                name = userInfo.user.name,
+                avatar = avatarUri?.toString(),
+                owner = owner
+            )
+
+            conversationDao.insert(chat)
+            return@withTransaction chat
+        }
+
+    private suspend fun upsertChatRoom(
+        roomAddress: String,
+        name: String?,
+        avatar: Avatar?,
+        owner: String
+    ): ChatEntity = localDataStore.withTransaction {
+
+        var chat = conversationDao.getConversationByRemoteId(roomAddress)
+        if (chat != null) {
+            return@withTransaction chat
+        }
+
+        chat = ChatEntity(
+            id = roomAddress,
             isGroupChat = false,
             name = name,
-            image = image,
+            avatar = null,
             owner = owner
         )
 
-        conversationDao.insert(conversationEntity)
-
-        return remoteDataStore.addUserToContact(userId, name)
+        conversationDao.insert(chat)
+        return@withTransaction chat
     }
 
-//    private suspend fun startConversation(
-//        conversationId: String,
-//        name: String?,
-//        isGroupChat: Boolean,
-//        myId: String
-//    ) = withContext(Dispatchers.IO) {
-//
-//        val conversationEntity = ConversationEntity(
-//            id = conversationId,
-//            isGroupChat = isGroupChat,
-//            name = name,
-//            from = myId,
-//            to = if (!isGroupChat) conversationId else null
-//        )
-//
-//        conversationDao.insert(conversationEntity)
-//
-//        // TODO: Do this in a worker
-//        remoteDb.startConversation(
-//            conversationId,
-//            name ?: defaultName,
-//            myId
-//        )
-//    }
-
     suspend fun listenForConversationUpdates() {
-        remoteDataStore.listenForChatChanges()
-            .collect { rosterChange ->
-                Timber.d("New Change to the roster")
+        val owner = connectionManager.getUsername()
+        if (owner != null)
+            remoteDataStore
+                .chatChanges
+                .collect { rosterChange ->
+                    Timber.d("New Change to the roster")
 
-                when (val userItem = rosterChange) {
-//                    is RemoteUserItem.UserData -> {
-//                        userDao.updateUser(userItem.toUserEntity())
-//                    }
-//                    is RemoteUserItem.UserPresence -> {
-//                        userDao.updatePresence(
-//                            userId = userItem.id,
-//                            isOnline = userItem.isOnline,
-//                            lastOnline = userItem.lastOnline,
-//                            status = userItem.status
-//                        )
-//                    }
+                    when (rosterChange) {
+                        is ListChange.ItemUpdated, is ListChange.ItemAdded -> {
+
+                            if (!rosterChange.item.isGroupChat) {
+                                createUserAndAddToContactList(
+                                    rosterChange.item.id,
+                                    owner
+                                )
+                            } else {
+                                upsertChatRoom(
+                                    rosterChange.item.id,
+                                    rosterChange.item.name,
+                                    null,
+                                    owner
+                                )
+                            }
+                        }
+//                        is ListChange.ItemAdded -> {
+//                            if (!rosterChange.item.isGroupChat) {
+//                                createUserAndAddToContactList(
+//                                    rosterChange.item.id,
+//                                    owner
+//                                )
+//                            } else {
+//                                upsertChatRoom(
+//                                    rosterChange.item.id,
+//                                    rosterChange.item.name,
+//                                    null,
+//                                    owner
+//                                )
+//                            }
+//                        }
+                        is ListChange.ItemDeleted -> {
+                            //TODO
+                        }
+                    }
+
                 }
-
-            }
     }
 }

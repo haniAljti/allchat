@@ -35,6 +35,7 @@ class ConnectionLifeCycleObserver(
         if (owner is Activity && !owner.isChangingConfigurations && isInBackground) {
             isInBackground = false
 
+            owner.lifecycleScope.launch { conversationRepository.startListeners() }
             owner.lifecycleScope.launch {
                 connectionManager.onResume()
             }
@@ -46,6 +47,7 @@ class ConnectionLifeCycleObserver(
             is Activity -> {
                 if (!owner.isChangingConfigurations) {
                     isInBackground = true
+                    owner.lifecycleScope.launch { conversationRepository.stopListeners() }
                     owner.lifecycleScope.launch {
                         connectionManager.onPause()
                     }

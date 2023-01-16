@@ -1,7 +1,9 @@
 package com.hanialjti.allchat.data.model
 
+import com.hanialjti.allchat.presentation.chat.Attachment
 import com.hanialjti.allchat.presentation.conversation.ContactContent
 import com.hanialjti.allchat.presentation.conversation.ContactImage
+import kotlinx.datetime.LocalDateTime
 
 data class Contact(
     val id: String? = null,
@@ -14,12 +16,13 @@ data class Contact(
     val content: ContactContent? = null,
     val to: User? = null,
     val unreadMessages: Int = 0,
-) {
+)
 
-    enum class State {
-        Active,
-        Inactive,
-        Composing,
-        Paused
-    }
-}
+@kotlinx.serialization.Serializable
+data class MessageSummary(
+    val body: String?,
+    val status: MessageStatus,
+    val timestamp: LocalDateTime,
+    val attachmentType: Attachment.Type?,
+    val isSentByMe: Boolean = false
+)

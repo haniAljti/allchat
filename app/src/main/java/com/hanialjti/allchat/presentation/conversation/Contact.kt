@@ -20,20 +20,24 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import coil.compose.rememberAsyncImagePainter
 import coil.request.ImageRequest
+import com.hanialjti.allchat.R
 
 sealed class ContactImage {
-    class DynamicImage(val imageUrl: String) : ContactImage()
-    class ImageRes(@DrawableRes val drawableRes: Int) : ContactImage()
+    class DynamicImage(val imageCacheUri: String) : ContactImage()
+    open class ImageRes(@DrawableRes val drawableRes: Int) : ContactImage()
+
+    class DefaultProfileImage(isGroupChat: Boolean) :
+        ImageRes(if (isGroupChat) R.drawable.ic_group else R.drawable.ic_user)
 
     @Composable
-    fun AsImage(modifier: Modifier) = when (this) {
+    fun AsImage(modifier: Modifier = Modifier) = when (this) {
         is DynamicImage ->
             Image(
                 painter = rememberAsyncImagePainter(
                     ImageRequest
                         .Builder(LocalContext.current)
                         .size(50, 50)
-                        .data(imageUrl)
+                        .data(imageCacheUri)
                         .build()
                 ),
                 contentDescription = null,
@@ -53,21 +57,22 @@ sealed class ContactImage {
 }
 
 sealed class ContactContent(val text: UiText) {
-    class LastMessage(text: UiText, val read: Boolean): ContactContent(text)
-    class Composing(text: UiText): ContactContent(text)
+    class LastMessage(text: UiText, val read: Boolean) : ContactContent(text)
+    class Composing(text: UiText) : ContactContent(text)
 }
 
 sealed class UiText {
-    data class DynamicString(val value: String): UiText()
+    data class DynamicString(val value: String) : UiText()
     class StringResource(
         @StringRes val resId: Int,
         vararg val args: Any
-    ): UiText()
+    ) : UiText()
+
     class PluralStringResource(
         @PluralsRes val resId: Int,
         val count: Int,
         vararg val args: Any
-    ): UiText()
+    ) : UiText()
 
     @OptIn(ExperimentalComposeUiApi::class)
     @Composable
@@ -75,7 +80,11 @@ sealed class UiText {
         return when (this) {
             is DynamicString -> value
             is StringResource -> stringResource(resId, *args)
-            is PluralStringResource -> pluralStringResource(id = resId, count = count, formatArgs = args)
+            is PluralStringResource -> pluralStringResource(
+                id = resId,
+                count = count,
+                formatArgs = args
+            )
         }
     }
 }

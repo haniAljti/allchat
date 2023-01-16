@@ -17,22 +17,16 @@ class GetContactInfoUseCase(
     private val userRepository: UserRepository
 ) {
 
-    @OptIn(ExperimentalCoroutinesApi::class)
     operator fun invoke(contactId: String): Flow<ContactInfo?> = flow {
-        userRepository.loggedInUser
-            .mapLatest { loggedInUser ->
-                if (loggedInUser != null) {
-                    conversationRepository.contact(contactId, loggedInUser.id)?.let { contact ->
-                        emit(
-                            ContactInfo(
-                                name = contact.name ?: defaultName,
-                                image = contact.image,
-                                content = contact.getConversationContent()
-                            )
-                        )
-                    }
-                } else emit(null)
-            }
+        conversationRepository.contact(contactId)?.let { contact ->
+            emit(
+                ContactInfo(
+                    name = contact.name ?: defaultName,
+                    image = contact.image,
+                    content = contact.getConversationContent()
+                )
+            )
+        }
     }
 
     private suspend fun Contact.getConversationContent(): UiText? {

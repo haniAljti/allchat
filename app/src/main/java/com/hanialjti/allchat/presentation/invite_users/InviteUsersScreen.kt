@@ -142,7 +142,8 @@ fun SelectableUser(
 
         Box(modifier = Modifier) {
 
-            UserImage(image = user.image, modifier = Modifier.size(60.dp))
+            user.avatar?.AsImage(Modifier.size(60.dp))
+//            UserImage(image = user.avatar?.data, modifier = Modifier.size(60.dp))
 //            user.image?.AsImage(modifier = Modifier.size(60.dp))
 
             androidx.compose.animation.AnimatedVisibility(

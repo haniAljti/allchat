@@ -12,7 +12,7 @@ import java.time.OffsetDateTime
     foreignKeys = [
         ForeignKey(
             entity = UserEntity::class,
-            parentColumns = arrayOf("external_id"),
+            parentColumns = arrayOf("id"),
             childColumns = arrayOf("user_id"),
             onDelete = ForeignKey.CASCADE
         )

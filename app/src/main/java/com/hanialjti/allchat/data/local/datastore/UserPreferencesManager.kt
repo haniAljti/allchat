@@ -32,6 +32,6 @@ class UserPreferencesManager(
     suspend fun updateUserCredentials(userCredentials: UserCredentials) = context.dataStore
         .updateData { it.copy(userCredentials = userCredentials) }
 
-    suspend fun updateLoggedInUser(user: LoggedInUser?) = context.dataStore
+    suspend fun updateLoggedInUser(user: String?) = context.dataStore
         .updateData { it.copy(loggedInUser = user) }
 }

@@ -10,6 +10,8 @@ import com.hanialjti.allchat.data.remote.xmpp.model.XmppConnectionConfig
 import com.hanialjti.allchat.presentation.MainActivity
 import org.jivesoftware.smack.ConnectionConfiguration
 import org.jivesoftware.smack.roster.Roster
+import org.jivesoftware.smack.roster.rosterstore.DirectoryRosterStore
+import org.jivesoftware.smack.roster.rosterstore.RosterStore
 import org.jivesoftware.smack.tcp.XMPPTCPConnection
 import org.jivesoftware.smack.tcp.XMPPTCPConnectionConfiguration
 import org.jivesoftware.smackx.bookmarks.BookmarkManager
@@ -17,9 +19,11 @@ import org.jivesoftware.smackx.ping.PingManager
 import org.jivesoftware.smackx.ping.android.ServerPingWithAlarmManager
 import org.jivesoftware.smackx.receipts.DeliveryReceiptManager
 import org.jivesoftware.smackx.vcardtemp.VCardManager
+import org.koin.android.ext.koin.androidContext
 import org.koin.core.qualifier.named
 import org.koin.dsl.module
 import timber.log.Timber
+import java.io.File
 
 val xmppModule = module {
     scope<MainActivity> {
@@ -39,6 +43,19 @@ val xmppModule = module {
         XMPPTCPConnection(get()).apply {
             setUseStreamManagement(true)
             setUseStreamManagementResumption(true)
+        }
+    }
+    single<RosterStore> {
+        androidContext().let {
+            val rosterStoreDir = File(it.cacheDir, "roster")
+            val rosterStore = if (rosterStoreDir.exists() && rosterStoreDir.isDirectory) {
+                DirectoryRosterStore.open(rosterStoreDir)
+            } else {
+                rosterStoreDir.mkdirs()
+                DirectoryRosterStore.init(rosterStoreDir)
+            }
+            get<Roster>().setRosterStore(rosterStore)
+            rosterStore
         }
     }
 //    single {
@@ -95,12 +112,12 @@ val xmppModule = module {
         XmppRemoteDataSource(get(), get())
     }
     single<ChatRemoteDataSource> {
-        ChatXmppDataSource(get(), get(), get(), get())
+        ChatXmppDataSource(get(), get(), get(), get(), get())
     }
     single<UserRemoteDataSource> {
         XmppUserRemoteDataSource(get())
     }
     single<ConnectionManager> {
-        XmppConnectionManager(get(), get(), get(named(DispatcherQualifiers.Io)), get())
+        XmppConnectionManager(get(), get(), get(), get(named(DispatcherQualifiers.Io)), get())
     }
 }

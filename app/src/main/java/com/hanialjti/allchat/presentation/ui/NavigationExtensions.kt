@@ -24,7 +24,7 @@ fun NavigationLayout(
     modifier: Modifier = Modifier,
     bottomSheetNavigator: BottomSheetNavigator,
     navController: NavHostController,
-    loggedInUser: LoggedInUser?
+    loggedInUser: String?
 ) {
 
     val initialDestination =

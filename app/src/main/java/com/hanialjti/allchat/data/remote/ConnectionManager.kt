@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.Flow
 import timber.log.Timber
 
 interface ConnectionManager {
+    val loggedInUser: Flow<String?>
 
     fun observeConnectivityStatus(): Flow<Status>
     fun getUsername(): String?

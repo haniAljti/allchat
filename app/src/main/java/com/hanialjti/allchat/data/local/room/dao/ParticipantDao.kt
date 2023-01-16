@@ -13,7 +13,7 @@ interface ParticipantDao {
     @Insert(onConflict = REPLACE)
     fun insertParticipants(vararg participant: ParticipantEntity)
 
-    @Query("SELECT COUNT(*) FROM participants WHERE chat_id = :chatId AND owner = :owner")
-    fun getParticipantCountForChat(owner: String, chatId: String): Int
+    @Query("SELECT COUNT(*) FROM participants WHERE chat_id = :chatId")
+    fun getParticipantCountForChat(chatId: String): Int
 
 }

@@ -21,63 +21,18 @@ class GetContactsUseCase(
 ) {
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    operator fun invoke(): Flow<PagingData<Contact>> = userRepository.loggedInUser
-        .flatMapLatest { user ->
-            if (user != null) {
-                conversationRepository
-                    .contacts(user.id)
-                    .mapLatest { contactList ->
-                        contactList.map { contact ->
-                            contact.copy(
-                                content = getConversationContent(
-                                    contact,
-                                    contact.lastMessage
-                                )
-                            )
-                        }
-                    }
-            } else emptyFlow()
+    operator fun invoke(): Flow<PagingData<Contact>> = conversationRepository
+        .myContacts()
+        .mapLatest { contactList ->
+            contactList.map { contact ->
+                contact.copy(
+                    content = getConversationContent(
+                        contact,
+                        contact.lastMessage
+                    )
+                )
+            }
         }
-
-
-//                            .filter { it.id != null }
-//                            .map { contactInfo ->
-//
-//                                val lastMessage =
-//                                    contactInfo.id?.let {
-//                                        chatRepository.getMostRecentMessageForConversation(
-//                                            it,
-//                                            user.id
-//                                        )
-//                                    }
-//
-//                                contactInfo.copy(
-//                                    lastMessage = lastMessage
-//                                )
-//                                Contact(
-//                                    id = contactInfo.conversationEntity.remoteId!!,
-//                                    lastUpdated = contactInfo.conversationEntity.lastUpdated,
-//                                    name = contactInfo.name,
-//                                    image = if (contactInfo.image != null) ContactImage.DynamicImage(
-//                                        contactInfo.image
-//                                    ) else ContactImage.ImageRes(
-//                                        getDefaultDrawableRes(contactInfo.conversationEntity.isGroupChat)
-//                                    ),
-//                                    status = lastMessage?.getUiStatus(
-//                                        contactInfo.conversationEntity
-//                                    ),
-//                                    isOnline = !contactInfo.conversationEntity.isGroupChat && contactInfo.user?.isOnline == true,
-//                                    isGroupChat = contactInfo.conversationEntity.isGroupChat,
-//                                    content = getConversationContent(contactInfo, lastMessage)
-//                                )
-//                            }
-//                        }
-//                    }
-//                                .sortedByDescending { it.lastMessage?.timestamp }
-
-//                    } else emptyFlow()
-
-//                        }
 
 
     private suspend fun getConversationContent(

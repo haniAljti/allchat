@@ -20,6 +20,7 @@ import com.hanialjti.allchat.data.model.MessageItem
 import com.hanialjti.allchat.presentation.chat.MessageTime
 import com.hanialjti.allchat.presentation.chat.imageBottomCornerRadius
 import com.hanialjti.allchat.presentation.ui.theme.ReceivedMessageGradiant
+import kotlinx.datetime.toJavaLocalDateTime
 
 @Composable
 fun ReceivedMessage(
@@ -96,7 +97,7 @@ fun ReceivedMessage(
 
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             MessageTime(
-                timestamp = message.timestamp,
+                timestamp = message.timestamp.toJavaLocalDateTime(),
                 modifier = Modifier.padding(horizontal = 20.dp)
             )
 //            message.status?.name?.let { Text(text = it, color = MaterialTheme.colors.primary) }

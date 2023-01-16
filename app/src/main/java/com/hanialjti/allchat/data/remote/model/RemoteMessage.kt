@@ -6,8 +6,10 @@ import com.hanialjti.allchat.data.model.MessageType
 import com.hanialjti.allchat.data.model.MessageStatus
 import java.time.OffsetDateTime
 
+sealed class RemoteMessageItem(open val id: String)
+
 data class RemoteMessage(
-    val id: String,
+    override val id: String,
     val chatId: String? = null,
     val sender: String? = null,
     val messageStatus: MessageStatus,
@@ -17,7 +19,13 @@ data class RemoteMessage(
     val markers: Map<String, Marker> = mapOf(),
     val timestamp: OffsetDateTime = OffsetDateTime.now(),
     val messageArchiveId: String? = null
-)
+): RemoteMessageItem(id)
+
+data class RemoteGroupInvitation(
+    override val id: String,
+    val by: String?,
+    val chatId: String
+): RemoteMessageItem(id)
 
 fun RemoteMessage.asMessageEntity() = MessageEntity(
     externalId = id,

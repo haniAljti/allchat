@@ -5,7 +5,7 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class UserPreferences(
     val userCredentials: UserCredentials? = UserCredentials(),
-    val loggedInUser: LoggedInUser? = null
+    val loggedInUser: String? = null
 )
 
 @Serializable

@@ -4,22 +4,18 @@ import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import com.hanialjti.allchat.data.local.room.model.UserEntry
+import com.hanialjti.allchat.data.model.Avatar
 import com.hanialjti.allchat.data.model.User
 import com.hanialjti.allchat.presentation.chat.defaultName
-import kotlinx.serialization.Serializable
+import com.hanialjti.allchat.presentation.conversation.ContactImage
 import java.time.OffsetDateTime
 
-@Entity(tableName = "users", indices = [Index("external_id", unique = true)])
+@Entity(tableName = "users", indices = [Index("id", unique = true)])
 data class UserEntity(
-    @PrimaryKey(autoGenerate = true)
-    @ColumnInfo(name = "user_id")
-    val id: Long = 0,
-    @ColumnInfo(name = "external_id")
-    val externalId: String,
-    @ColumnInfo(name = "owner_id")
-    val ownerId: String? = null,
+    @PrimaryKey val id: String,
     val name: String? = defaultName,
-    val image: String? = null,
+    val avatar: String? = null,
     @ColumnInfo(name = "is_online")
     val isOnline: Boolean = false,
     @ColumnInfo(name = "last_online")
@@ -28,9 +24,10 @@ data class UserEntity(
 )
 
 fun UserEntity.asUser() = User(
-    id = externalId,
+    id = id,
     name = name,
-    image = image,
+    avatar = avatar?.let { ContactImage.DynamicImage(avatar) }
+        ?: ContactImage.DefaultProfileImage(false),
     isOnline = isOnline,
     lastOnline = lastOnline?.toLocalDateTime()
 )

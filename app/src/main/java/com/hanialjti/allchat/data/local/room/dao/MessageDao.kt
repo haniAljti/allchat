@@ -15,7 +15,7 @@ import java.time.OffsetDateTime
 interface MessageDao {
 
     @Query("SELECT * FROM messages WHERE contact_id = :conversation AND owner_id = :owner ORDER BY timestamp DESC")
-    fun getMessagesByConversation(conversation: String?, owner: String?): PagingSource<Int, MessageEntry>
+    fun getMessagesByConversation(conversation: String?, owner: String?): PagingSource<Int, MessageEntity>
 
     @Delete
     suspend fun deleteOne(message: MessageEntity)

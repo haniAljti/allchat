@@ -21,6 +21,7 @@ import com.hanialjti.allchat.presentation.chat.MessageTime
 import com.hanialjti.allchat.presentation.chat.imageBottomCornerRadius
 import com.hanialjti.allchat.presentation.ui.theme.Green50
 import com.hanialjti.allchat.presentation.ui.theme.SentMessageGradiant
+import kotlinx.datetime.toJavaLocalDateTime
 
 @Composable
 fun SentMessage(
@@ -42,7 +43,7 @@ fun SentMessage(
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             MessageTime(
-                timestamp = message.timestamp,
+                timestamp = message.timestamp.toJavaLocalDateTime(),
                 modifier = Modifier.padding(horizontal = 20.dp)
             )
             MessageStatusIcon(messageStatus = message.status)

@@ -53,8 +53,6 @@ object AllChat {
         return koinApp as KoinApplication
     }
 
-
-
     fun stop() {
         koinApp?.close()
         koinApp = null

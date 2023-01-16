@@ -85,7 +85,7 @@ fun EditUserInfoScreen(
         }
 
         Button(
-            onClick = { /*TODO*/ },
+            onClick = { viewModel.updateUserInfo() },
             modifier = Modifier
                 .padding(20.dp)
                 .fillMaxWidth()
