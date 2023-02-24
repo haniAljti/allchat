@@ -20,6 +20,7 @@ fun TopBar(
     modifier: Modifier = Modifier,
     title: String? = "",
     onBackClicked: () -> Unit,
+    moreOptions: @Composable () -> Unit
 ) {
     TopAppBar(
         modifier = modifier.height(80.dp),
@@ -50,6 +51,8 @@ fun TopBar(
                             .weight(1f)
                     )
                 }
+
+                moreOptions()
             }
 
 //            Spacer(

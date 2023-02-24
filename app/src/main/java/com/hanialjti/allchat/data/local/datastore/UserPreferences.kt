@@ -5,6 +5,7 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class UserPreferences(
     val userCredentials: UserCredentials? = UserCredentials(),
+    val clientPreferences: ClientPreferences = ClientPreferences(),
     val loggedInUser: String? = null
 )
 
@@ -17,6 +18,7 @@ data class UserCredentials(
 @Serializable
 data class ClientPreferences(
     val enableChatMarkers: Boolean = true,
+    val enableChatStateNotifications: Boolean = true,
 )
 
 @Serializable

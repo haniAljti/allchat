@@ -23,37 +23,35 @@ val ReceivedMessageGradiant = Brush.radialGradient(
 @Preview
 @Composable
 fun PreviewReceivedMessageGradiant() {
-    ReceivedMessage(
-        message = MessageItem.MessageData(
-            body = "Hi\nksdkfm",
-            id = "1",
-            attachment = null,
-            senderId = "2",
-            senderImage = null,
-            senderName = null
-        ),
-        nextMessage = MessageItem.MessageData(
-            body = "Hi\nksdkfm",
-            id = "2",
-            attachment = null,
-            senderId = "2",
-            senderImage = null,
-            senderName = null
-        ),
-        previousMessage = MessageItem.MessageData(
-            body = "Hi\nksdkfm",
-            id = "3",
-            attachment = null,
-            senderId = "2",
-            senderImage = null,
-            senderName = null
-        ),
-        onResumeAudio = {  },
-        onPauseAudio = {  },
-        onAudioSeekValueChanged = {  },
-        onImageClicked = {  },
-        onPdfClicked = {  },
-        isActiveMessage = false,
-        lastTrackPosition = 0
-    )
+//    ReceivedMessage(
+//        message = MessageItem.MessageData(
+//            body = "Hi\nksdkfm",
+//            id = "1",
+//            attachment = null,
+//            senderId = "2",
+//            senderImage = null,
+//            senderName = null
+//        ),
+//        nextMessage = MessageItem.MessageData(
+//            body = "Hi\nksdkfm",
+//            id = "2",
+//            attachment = null,
+//            senderId = "2",
+//            senderImage = null,
+//            senderName = null
+//        ),
+//        previousMessage = MessageItem.MessageData(
+//            body = "Hi\nksdkfm",
+//            id = "3",
+//            attachment = null,
+//            senderId = "2",
+//            senderImage = null,
+//            senderName = null
+//        ),
+//        onResumeAudio = {  },
+//        onPauseAudio = {  },
+//        onImageClicked = {  },
+//        onPdfClicked = {  },
+//        isActiveMessage = false
+//    )
 }

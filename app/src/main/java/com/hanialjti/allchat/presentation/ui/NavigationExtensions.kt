@@ -11,11 +11,12 @@ import com.google.accompanist.navigation.material.BottomSheetNavigator
 import com.google.accompanist.navigation.material.ExperimentalMaterialNavigationApi
 import com.google.accompanist.navigation.material.ModalBottomSheetLayout
 import com.google.accompanist.navigation.material.bottomSheet
-import com.hanialjti.allchat.data.local.datastore.LoggedInUser
 import com.hanialjti.allchat.presentation.chat.ChatScreen
+import com.hanialjti.allchat.presentation.component.CropImage
 import com.hanialjti.allchat.presentation.conversation.ConversationsScreen
 import com.hanialjti.allchat.presentation.create_chat_room.SelectInitialParticipantsScreen
 import com.hanialjti.allchat.presentation.invite_users.InviteUsersScreen
+import com.hanialjti.allchat.presentation.preview_attachment.MediaPreview
 import com.hanialjti.allchat.presentation.ui.screens.*
 
 @OptIn(ExperimentalMaterialNavigationApi::class)
@@ -50,6 +51,9 @@ fun NavigationLayout(
                 AuthenticationScreen(navController)
             }
 
+            composable(Screen.CropImage.route) {
+                CropImage()
+            }
 
             composable(Screen.Conversations.route) {
                 ConversationsScreen(navController)
@@ -79,11 +83,18 @@ fun NavigationLayout(
                 } ?: throw IllegalArgumentException("Chat room id must not be null")
             }
 
+            val uri = "https://allchat.com"
+
             composable(
                 route = Screen.Chat.route,
                 arguments = listOf(
                     navArgument("contactId") { type = NavType.StringType },
                     navArgument("isGroupChat") { type = NavType.BoolType }
+                ),
+                deepLinks = listOf(
+                    navDeepLink {
+                        uriPattern = uri.plus("/chat/{contactId}?isGroupChat={isGroupChat}")
+                    }
                 )
             ) { backStackEntry ->
                 backStackEntry.arguments?.getString("contactId")?.let { contactId ->
@@ -107,32 +118,22 @@ fun NavigationLayout(
             }
 
 
-//            composable(
-//                route = Screen.ImagePreview.route,
-//                arguments = listOf(
-//                    navArgument("messageId") { type = NavType.IntType },
-//                    navArgument("enableInput") { type = NavType.BoolType }
-//                )
-//            ) { backStackEntry ->
-//                backStackEntry.arguments?.getInt("messageId")?.let { messageId ->
-//                    navController.previousBackStackEntry?.let {
-//                        ImagePreview(
-//                            messageId = messageId,
-//                            enableInput = backStackEntry.arguments?.getBoolean("enableInput")
-//                                ?: false,
-//                            navController = navController,
-//                            viewModel = getViewModel(
-//                                owner = it,
-//                            )
-//                        )
-//                    }
-//                }
-//            }
+            composable(
+                route = Screen.ImagePreview.route,
+                arguments = listOf(navArgument("messageId") { type = NavType.StringType })
+            ) { backStackEntry ->
+                backStackEntry.arguments?.getString("messageId")?.let { messageId ->
+                    MediaPreview(
+                        messageId = messageId,
+                        navController = navController,
+                    )
+                }
+            }
         }
-
-
     }
+
 }
+
 
 fun NavController.toChatScreen(contactId: String, isGroupChat: Boolean) {
     navigate(
@@ -150,11 +151,10 @@ fun NavController.toEditUserInfoScreen() {
     navigate(Screen.EditUserInfo.route)
 }
 
-fun NavController.toImagePreviewScreen(messageId: Int, enableInput: Boolean = false) {
+fun NavController.toImagePreviewScreen(messageId: String) {
     navigate(
         Screen.ImagePreview.route
-            .replace("{messageId}", messageId.toString())
-            .replace("{enableInput}", enableInput.toString())
+            .replace("{messageId}", messageId)
     )
 }
 

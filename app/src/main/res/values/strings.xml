@@ -10,11 +10,18 @@
     <string name="last_online_other_pattern">d MMMM yyyy</string>
     <string name="online">Online</string>
 
+    //Notification
+    <string name="notification_title">AllChat</string>
+    <string name="chat_notification_channel_name">Chat</string>
+    <string name="chat_notification_channel_desc">Incoming chat messages</string>
+    <string name="notification_message">Chat Service is running in the background</string>
+
     //File Picker
     <string name="choose_pdf_title">Choose an app to open the pdf file with</string>
-    <string name="open_gallery">Open gallery</string>
-    <string name="open_camera">Open camera</string>
-    <string name="choose_pdf">Choose PDF file</string>
+    <string name="gallery">Gallery</string>
+    <string name="camera">Camera</string>
+    <string name="document">File</string>
+    <string name="location">Location</string>
 
     //Separators
     <string name="separator_today">Today</string>

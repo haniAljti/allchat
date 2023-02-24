@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.FloatingActionButton
 import androidx.compose.material.Icon
 import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Text
@@ -86,14 +85,26 @@ fun ConversationsScreen(
 
         }
 
-        FloatingActionButton(
+        androidx.compose.material3.FloatingActionButton(
             onClick = { navController.toCreateEntityScreen() },
+            containerColor = MaterialTheme.colors.primary,
             modifier = Modifier
                 .align(BottomEnd)
                 .padding(20.dp)
-                .size(70.dp)
         ) {
-            Icon(imageVector = Icons.Default.Add, contentDescription = null)
+//            with(context) {
+//                contentResolver.openFileDescriptor(uri, "r")?.use { parcelFileDescriptor ->
+//                    val pdfRenderer = PdfRenderer(parcelFileDescriptor).openPage(0)
+//                    val bitmap = Bitmap.createBitmap(pdfRenderer.width, pdfRenderer.height, Bitmap.Config.ARGB_8888)
+//                    pdfRenderer.render(bitmap, null, null, pdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+//                    pdfRenderer.close()
+//                }
+//            }
+            Icon(
+                imageVector = Icons.Default.Add,
+                contentDescription = null,
+                tint = MaterialTheme.colors.background
+            )
         }
     }
 }
@@ -128,7 +139,9 @@ fun ConversationList(
 @OptIn(ExperimentalAnimationApi::class)
 @Composable
 fun ConversationItem(
-    contact: Contact, modifier: Modifier = Modifier, onConversationClicked: () -> Unit
+    contact: Contact,
+    modifier: Modifier = Modifier, 
+    onConversationClicked: () -> Unit
 ) {
     Row(modifier = modifier
         .clickable { onConversationClicked() }
@@ -148,90 +161,97 @@ fun ConversationItem(
             ) {
                 Box(
                     modifier = Modifier
-                        .size(24.dp)
+                        .size(16.dp)
                         .clip(CircleShape)
-                        .border(3.dp, MaterialTheme.colors.primary, CircleShape)
+//                        .shadow(elevation = 50.dp, shape = CircleShape)
+                        .border(3.dp, Color(0xFF111A14), CircleShape)
                         .background(Green)
                 )
             }
         }
 
+        Column(Modifier.padding(horizontal = 10.dp)) {
 
-        Column(
-            verticalArrangement = Arrangement.SpaceEvenly,
-            modifier = Modifier
-                .weight(1F)
-                .padding(start = 10.dp)
-        ) {
-            contact.name?.let {
-                Text(
-                    text = it, color = MaterialTheme.colors.primary, fontWeight = FontWeight.Bold
-                )
+            Row(
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+
+                contact.name?.let {
+                    Text(
+                        text = it,
+                        color = MaterialTheme.colors.primary,
+                        fontWeight = FontWeight.Bold
+                    )
+                } ?: Spacer(modifier = Modifier.width(1.dp))
+
+                contact.lastMessage?.timestamp?.let { lastUpdated ->
+                    Text(
+                        text = lastUpdated.toJavaLocalDateTime().asString(TWO_DIGIT_FORMAT),
+                        color = MaterialTheme.colors.primary,
+                        modifier = Modifier.align(Alignment.Bottom)
+                    )
+                }
             }
 
-            contact.content?.let {
-                Row {
-                    ConversationContentText(
-                        text = it.text.asString(),
-                        color = MaterialTheme.colors.primary,
-                        fontWeight = if (it is ContactContent.LastMessage && !it.read) FontWeight.Bold else FontWeight.Normal
-                    )
-                    Box(modifier = Modifier.height(25.dp)) {
-                        if (contact.lastMessage?.isSentByMe == true) {
-                            contact.lastMessage.status.let { status ->
-                                MessageStatusIcon(messageStatus = status)
+            Row(modifier = Modifier.fillMaxWidth()) {
+
+                contact.content?.let {
+                    Row {
+                        ConversationContentText(
+                            text = it.text.asString(),
+                            color = MaterialTheme.colors.primary,
+                            fontWeight = if (it is ContactContent.LastMessage && !it.read) FontWeight.Bold else FontWeight.Normal,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Box(modifier = Modifier.height(25.dp)) {
+                            if (contact.lastMessage?.isSentByMe == true) {
+                                contact.lastMessage.status.let { status ->
+                                    MessageStatusIcon(messageStatus = status)
+                                }
                             }
                         }
                     }
                 }
-            }
 
-        }
-
-        Column(
-            horizontalAlignment = CenterHorizontally, modifier = Modifier.padding(end = 10.dp)
-        ) {
-
-            contact.lastMessage?.timestamp?.let { lastUpdated ->
-                Text(
-                    text = lastUpdated.toJavaLocalDateTime().asString(TWO_DIGIT_FORMAT),
-                    color = MaterialTheme.colors.primary,
-                    modifier = Modifier
-                )
-            }
-
-            if (contact.unreadMessages > 0) {
-                Box(
-                    modifier = Modifier
-                        .padding(top = 5.dp)
-                        .height(25.dp)
-                        .defaultMinSize(minWidth = 25.dp)
-                        .clip(CircleShape)
-                        .background(Green)
-                        .align(CenterHorizontally)
-                        .padding(PaddingValues(horizontal = 7.dp))
-                ) {
-                    Text(
-                        text = contact.unreadMessages.toString(),
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.align(Center)
-                    )
+                if (contact.unreadMessages > 0) {
+                    Box(
+                        modifier = Modifier
+                            .padding(top = 5.dp)
+                            .height(25.dp)
+                            .defaultMinSize(minWidth = 25.dp)
+                            .clip(CircleShape)
+                            .background(Green)
+                            .padding(PaddingValues(horizontal = 7.dp))
+                    ) {
+                        Text(
+                            text = contact.unreadMessages.toString(),
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.align(Center)
+                        )
+                    }
                 }
+
             }
+
         }
+
     }
 }
 
 @Composable
 fun ConversationContentText(
-    text: String, color: Color, fontWeight: FontWeight, modifier: Modifier = Modifier,
+    text: String,
+    color: Color,
+    fontWeight: FontWeight,
+    modifier: Modifier = Modifier,
 ) {
     Text(
         text = text,
         color = color,
         fontWeight = fontWeight,
-        maxLines = 2,
+        maxLines = 1,
         overflow = TextOverflow.Ellipsis,
         modifier = modifier
     )

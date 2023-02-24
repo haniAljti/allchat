@@ -1,42 +1,47 @@
 package com.hanialjti.allchat.presentation.component
 
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import com.hanialjti.allchat.presentation.chat.Attachment
+import androidx.compose.ui.unit.dp
+import com.hanialjti.allchat.data.model.Attachment
+import com.hanialjti.allchat.data.model.Media
+import com.hanialjti.allchat.data.remote.model.DownloadProgress
 
 @Composable
 fun Attachment(
     attachment: Attachment,
+    downloadProgress: DownloadProgress?,
     modifier: Modifier = Modifier,
-    onResumeAudio: () -> Unit,
+    onResumeAudio: (Int) -> Unit,
     onPauseAudio: () -> Unit,
-    onAudioSeekValueChanged: (Int) -> Unit,
     onImageClicked: () -> Unit,
     onPdfClicked: () -> Unit,
     isActiveMessage: Boolean,
-    lastTrackPosition: Int
+    timestampAndStatus: @Composable () -> Unit = { }
 ) {
-    when (attachment) {
-        is Attachment.Image -> {
-            val imageSource = attachment.url ?: attachment.cacheUri
-            imageSource?.let {
-                ImageAttachment(
-                    image = attachment,
-                    modifier = modifier,
-                    onImageClicked = { onImageClicked() }
-                )
-            }
+    when (attachment.type) {
+        Attachment.Type.Image -> {
+            ImageAttachment(
+                image = attachment as Media,
+                modifier = modifier,
+                onImageClicked = { onImageClicked() },
+                timestampAndStatus = timestampAndStatus
+            )
         }
-        is Attachment.Recording -> AudioAttachment(
-            recording = attachment,
+        Attachment.Type.Audio -> AudioAttachment(
+            recording = attachment as Media,
+            downloadProgress = downloadProgress,
             onResumeAudio = onResumeAudio,
             onPauseAudio = onPauseAudio,
-            onSeekValueChanged = onAudioSeekValueChanged,
             isActiveMessage = isActiveMessage,
-            lastTrackPosition = lastTrackPosition
+            modifier = modifier
+                .padding(horizontal = 10.dp)
+                .padding(top = 10.dp)
         )
-        is Attachment.Pdf -> PdfFileAttachment(
-            pdf = attachment,
+        Attachment.Type.Document -> PdfFileAttachment(
+            pdf = attachment as Media,
+            downloadProgress = downloadProgress,
             onPdfClicked = onPdfClicked,
             modifier = Modifier
         )

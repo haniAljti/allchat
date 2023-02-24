@@ -2,16 +2,21 @@ package com.hanialjti.allchat.presentation.chat
 
 import android.media.MediaPlayer
 import androidx.compose.runtime.*
+import com.hanialjti.allchat.common.utils.Logger
+import com.hanialjti.allchat.data.model.Media
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 @Stable
 class MediaPlayerState(
     private var mediaPlayer: MediaPlayer?,
-    private val coroutine: CoroutineScope,
-    val activeRecording: MutableState<Attachment.Recording?>,
+    private val coroutine: CoroutineScope
 ) {
+
+//    private var playing: String? = null
+
+    var activeRecording: Media? by mutableStateOf(null)
+        private set
 
     private fun initializePlayer() {
         if (mediaPlayer == null) {
@@ -24,6 +29,7 @@ class MediaPlayerState(
     }
 
     fun pauseMedia(): Int {
+        Logger.d { "Pausing media player..." }
         coroutine.launch {
             try {
                 mediaPlayer?.pause()
@@ -35,6 +41,7 @@ class MediaPlayerState(
     }
 
     fun stopMedia() {
+        Logger.d { "Stopping media player..." }
         coroutine.launch {
             try {
                 mediaPlayer?.stop()
@@ -45,6 +52,7 @@ class MediaPlayerState(
     }
 
     fun releasePlayer() {
+        Logger.d { "Releasing media player..." }
         try {
             mediaPlayer?.release()
             mediaPlayer = null
@@ -53,32 +61,28 @@ class MediaPlayerState(
         }
     }
 
-    fun playMedia(recording: Attachment.Recording, trackPosition: Int?) {
-
+    fun playMedia(recording: Media, seekTo: Int) {
+        Logger.d { "Play media. RecordingUri: ${recording.cacheUri}, seekValue: $seekTo" }
         initializePlayer()
 
-        coroutine.launch(Dispatchers.IO) {
-            try {
+        try {
 
-                mediaPlayer?.apply {
+            mediaPlayer?.apply {
 
+                if (activeRecording == null || recording != activeRecording) {
+                    activeRecording = recording
                     reset()
                     setDataSource(recording.cacheUri)
                     prepare()
-
-                    if (trackPosition != null) {
-                        seekTo(trackPosition)
-                    } else {
-                        start()
-                    }
-
                 }
-                activeRecording.value = recording
-
-            } catch (e: Exception) {
-                e.printStackTrace()
+                seekTo(seekTo)
+                start()
             }
+
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
+
     }
 
 }
@@ -90,7 +94,6 @@ fun rememberMediaPlayerState(
 ): MediaPlayerState = remember {
     MediaPlayerState(
         mediaPlayer,
-        coroutine,
-        mutableStateOf(null)
+        coroutine
     )
 }

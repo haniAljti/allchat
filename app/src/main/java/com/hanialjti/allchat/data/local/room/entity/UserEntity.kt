@@ -4,8 +4,6 @@ import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
-import com.hanialjti.allchat.data.local.room.model.UserEntry
-import com.hanialjti.allchat.data.model.Avatar
 import com.hanialjti.allchat.data.model.User
 import com.hanialjti.allchat.presentation.chat.defaultName
 import com.hanialjti.allchat.presentation.conversation.ContactImage

@@ -1,195 +1,448 @@
 package com.hanialjti.allchat.presentation.component
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateColor
+import androidx.annotation.DrawableRes
+import androidx.annotation.StringRes
+import androidx.compose.animation.*
 import androidx.compose.animation.core.animateDp
 import androidx.compose.animation.core.updateTransition
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
-import coil.compose.rememberAsyncImagePainter
+import androidx.compose.ui.unit.sp
 import com.hanialjti.allchat.R
-import com.hanialjti.allchat.presentation.chat.Attachment
-import com.hanialjti.allchat.presentation.ui.theme.Gray
+import com.hanialjti.allchat.data.model.Attachment
+import com.hanialjti.allchat.data.model.MessageItem
+import com.hanialjti.allchat.data.model.ReplyingToMessage
 import com.hanialjti.allchat.presentation.ui.theme.Green
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.time.Duration
+import kotlin.math.roundToInt
 import kotlin.time.toKotlinDuration
 
+//@Preview
+//@Composable
+//fun TextInputWithText() {
+//    TextInput(
+//        message = "Hello",
+//        onMessageChanged = { },
+//        onOpenGallery = { },
+//        onOpenCamera = { },
+//        onSelectDocument = { },
+//        onRecordClicked = { },
+//        onRecordCancelled = { },
+//        onRecordLongPressed = { },
+//        onRecordReleased = { }
+//    ) { }
+//}
+
+@OptIn(ExperimentalAnimationApi::class, ExperimentalMaterialApi::class)
 @Composable
 fun TextInput(
     modifier: Modifier = Modifier,
     message: String,
     attachment: Attachment? = null,
-    sendButtonEnabled: Boolean = true,
     attachmentButtonVisible: Boolean = true,
     recordButtonVisible: Boolean = true,
+    replyingTo: MessageItem.MessageData?,
+    onReplyToCleared: () -> Unit,
     onMessageChanged: (String) -> Unit,
-    onAttachmentClicked: () -> Unit,
-    onRemoveAttachmentClicked: () -> Unit = {  },
+    onOpenGallery: () -> Unit,
+    onOpenCamera: () -> Unit,
+    onSelectDocument: () -> Unit,
     onRecordClicked: () -> Unit,
-    onRecordLongPressed: () -> Unit,
-    onRecordReleased: () -> Unit,
+    onRecordingCancelled: () -> Unit,
+    onRecordingStarted: () -> Unit,
+    onRecordingEnded: () -> Unit,
     onSendClicked: () -> Unit
 ) {
 
     Column(modifier = modifier) {
 
-        AnimatedVisibility(visible = attachment != null) {
-            Box(
-                modifier = modifier
-                    .fillMaxWidth()
-                    .height(200.dp)
-            ) {
-                when (attachment) {
-                    is Attachment.Image -> {
-
-                        Image(
-                            painter = rememberAsyncImagePainter(attachment.cacheUri),
-                            contentScale = ContentScale.Crop,
-                            contentDescription = null,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(1.dp)
-                                .clip(RoundedCornerShape(15.dp))
+        AnimatedVisibility(visible = replyingTo != null) {
+            replyingTo?.id?.let {
+                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    ReplyingTo(
+                        message = ReplyingToMessage(
+                            it,
+                            replyingTo.senderName,
+                            replyingTo.body,
+                            replyingTo.attachment
+                        ),
+                        modifier = Modifier.weight(1f).padding(10.dp)
+                    ) { }
+                    IconButton(onClick = { onReplyToCleared() }) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_close),
+                            tint = Color.White,
+                            modifier = Modifier.size(24.dp),
+                            contentDescription = null
                         )
+                    }
+                }
+            }
+        }
 
-                        IconButton(
-                            modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .padding(10.dp)
-                                .background(Color.DarkGray, shape = CircleShape),
-                            onClick = onRemoveAttachmentClicked) {
-                            Icon(
-                                painter = painterResource(id = R.drawable.ic_remove),
-                                modifier = Modifier.size(24.dp),
-                                tint = Color.White,
-                                contentDescription = null
+        val userInputState = rememberUserInputState(recordInitialValue = RecordingButtonState.Initial)
+        val attachmentDeleteRecordingButton by remember { derivedStateOf { attachmentButtonVisible || userInputState.isRecording } }
+        var showSelectAttachmentMenu by remember { mutableStateOf(false) }
+        val scope = rememberCoroutineScope()
+        val haptic = LocalHapticFeedback.current
+        val layoutDirection = LocalLayoutDirection.current
+
+        Box {
+
+            var size by remember { mutableStateOf(Size.Zero) }
+            val sizePx = with(LocalDensity.current) { 55.dp.toPx() }
+            val width = remember(size) {
+                if (size.width == 0f) {
+                    1f
+                } else {
+                    size.width - (sizePx)
+                }
+            }
+
+            val anchors = mapOf(-width + (sizePx / 2) to RecordingButtonState.Cancel, 0f to RecordingButtonState.Initial)
+
+            val buttonMode by remember(message, attachment, recordButtonVisible) {
+                derivedStateOf {
+                    when {
+                        !recordButtonVisible || message.isNotBlank() || attachment != null -> SendButtonMode.Send
+                        recordButtonVisible -> SendButtonMode.Record
+                        else -> SendButtonMode.None
+                    }
+                }
+            }
+
+            var textInputModifier = Modifier
+                .onSizeChanged { size = Size(it.width.toFloat(), it.height.toFloat()) }
+                .fillMaxWidth()
+
+            if (buttonMode == SendButtonMode.Record) {
+                textInputModifier = textInputModifier
+                    .swipeable(
+                        interactionSource = userInputState.interactionSource,
+                        state = userInputState.swipeableState,
+                        anchors = anchors,
+                        reverseDirection = layoutDirection == LayoutDirection.Rtl,
+                        thresholds = { _, _ -> FractionalThreshold(0.5f) },
+                        orientation = Orientation.Horizontal,
+                        enabled = !userInputState.thresholdReached
+                    )
+
+            }
+
+            if (userInputState.isRecording) {
+                textInputModifier = textInputModifier
+                    .background(
+                        brush = Brush.linearGradient(
+                            0f to Color(0xFF8F1100),
+                            0.5f to Color(0xFF111A14)
+                        )
+                    )
+            }
+
+            if (userInputState.isRecording) {
+                DisposableEffect(Unit) {
+                    onRecordingStarted()
+
+                    onDispose {
+                        onRecordingEnded()
+                        scope.launch {
+                            userInputState.animateRecordingStateTo(RecordingButtonState.Initial)
+                        }
+                    }
+                }
+            }
+
+            if (userInputState.thresholdReached) {
+                LaunchedEffect(Unit) {
+                    scope.launch {
+                        println("Threshold reached")
+                        onRecordingCancelled()
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    }
+                }
+            }
+
+            if (!showSelectAttachmentMenu) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = textInputModifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                ) {
+
+
+                    AnimatedContent(targetState = userInputState.isRecording, modifier = Modifier.weight(1f)) {
+                        if (it) {
+
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                modifier = Modifier.width(100.dp).background(Color.Transparent)
+                            ) {
+                                var ticks by remember { mutableStateOf(0) }
+                                LaunchedEffect(Unit) {
+                                    while (true) {
+                                        delay(1000)
+                                        ticks++
+                                    }
+                                }
+
+                                val duration =
+                                    Duration.ofSeconds(ticks.toLong()).toKotlinDuration()
+
+                                Icon(
+                                    painter = painterResource(id = R.drawable.ic_remove),
+                                    modifier = Modifier
+                                        .padding(horizontal = 25.dp)
+                                        .size(24.dp),
+                                    contentDescription = null,
+                                    tint = Color.White
+                                )
+
+                                Text(
+                                    text = "Recording $duration",
+                                    fontSize = 14.sp,
+                                    maxLines = 1,
+                                    modifier = modifier.weight(1f).background(Color.Transparent)
+                                )
+
+                            }
+
+                        } else {
+                            BasicTextField(
+                                value = message,
+                                onValueChange = onMessageChanged,
+                                maxLines = 4,
+                                textStyle = androidx.compose.ui.text.TextStyle(
+                                    fontSize = 16.sp,
+                                    color = Color.White
+                                ),
+                                modifier = Modifier.weight(1f),
+                                cursorBrush = SolidColor(Color.White),
+                                decorationBox = { innerTextField ->
+                                    Row(
+                                        modifier
+                                            .clip(RoundedCornerShape(30))
+                                            .background(Color(0xFF383838))
+                                            .height(45.dp)
+                                            .padding(start = 15.dp)
+                                            .padding(vertical = 1.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Box(Modifier.weight(1f)) {
+                                            if (message.isEmpty()) Text(
+                                                stringResource(id = R.string.message_text_field_placeholder),
+                                                style = LocalTextStyle.current.copy(
+                                                    color = Color.White,
+                                                    fontSize = 16.sp
+                                                )
+                                            )
+                                            innerTextField()
+                                        }
+                                        if (attachmentDeleteRecordingButton) {
+                                            IconButton(
+                                                onClick = { showSelectAttachmentMenu = true },
+                                                modifier = Modifier
+                                                    .size(45.dp)
+                                            ) {
+                                                Icon(
+                                                    painter = painterResource(id = R.drawable.ic_attachment),
+                                                    modifier = Modifier.size(24.dp),
+                                                    contentDescription = null,
+                                                    tint = Color.White
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
                             )
                         }
                     }
-                }
-            }
-        }
 
 
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            if (attachmentButtonVisible) {
-                IconButton(onClick = onAttachmentClicked) {
-                    Icon(
-                        painter = painterResource(id = R.drawable.ic_attachment),
-                        modifier = Modifier.size(24.dp),
-                        contentDescription = null,
-                        tint = Color.Black
-                    )
-                }
-            }
+                    Spacer(modifier = Modifier.width(5.dp))
 
-            TextField(
-                modifier = Modifier.weight(1f),
-                value = message,
-                onValueChange = onMessageChanged,
-                colors = TextFieldDefaults.textFieldColors(
-                    backgroundColor = Color.Transparent,
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent
-                ),
-                placeholder = {
-                    Text(text = stringResource(id = R.string.message_text_field_placeholder))
-                }
-            )
+                    AnimatedContent(
+                        targetState = buttonMode,
+                        transitionSpec = { scaleIn() with scaleOut() },
+                        modifier = Modifier.offset {
+                            IntOffset(
+                                userInputState.swipeOffset.roundToInt(),
+//                                swipeableState.offset.value.roundToInt(),
+                                0
+                            )
+                        }
+                    ) {
 
-            Spacer(
-                modifier = Modifier
-                    .height(25.dp)
-                    .width(1.dp)
-                    .background(Gray)
-            )
+                        val buttonModifier = Modifier
+                            .clip(RoundedCornerShape(50))
 
-            val interactionSource = remember { MutableInteractionSource() }
-            val pressed by interactionSource.collectIsPressedAsState()
+                        val initialButtonSize by remember { mutableStateOf(45.dp) }
 
-            if (pressed) {
-                DisposableEffect(Unit) {
-                    onRecordLongPressed()
-                    onDispose {
-                        onRecordReleased()
-                    }
-                }
-            }
-
-            AnimatedVisibility(recordButtonVisible && attachment == null) {
-
-                val transition = updateTransition(targetState = pressed, label = "")
-
-                val size by transition.animateDp(label = "") { recording ->
-                    if (recording) 70.dp else 50.dp
-                }
-
-                val color by transition.animateColor(label = "") { recording ->
-                    if (recording) Green else Color.Transparent
-                }
-
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier) {
-                    AnimatedVisibility(visible = pressed) {
-                        if (pressed) {
-                            var ticks by remember { mutableStateOf(0) }
-                            LaunchedEffect(Unit) {
-                                while (true) {
-                                    delay(1000)
-                                    ticks++
+                        when (it) {
+                            SendButtonMode.None -> {}
+                            SendButtonMode.Send -> {
+                                IconButton(
+                                    onClick = onSendClicked,
+                                    modifier = buttonModifier
+                                        .background(Color(0xFF383838))
+                                        .size(initialButtonSize)
+                                ) {
+                                    Icon(
+                                        painter = painterResource(
+                                            id = R.drawable.ic_send
+                                        ),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(24.dp),
+                                        tint = Color.White
+                                    )
                                 }
                             }
+                            SendButtonMode.Record -> {
 
-                            val duration = Duration.ofSeconds(ticks.toLong()).toKotlinDuration()
+                                val transition =
+                                    updateTransition(targetState = userInputState.isRecording, label = "")
 
-                            Text(text = "Recording $duration", modifier = Modifier.padding(10.dp))
+                                val recordButtonSize by transition.animateDp(label = "") { recording ->
+                                    if (recording) 60.dp else initialButtonSize
+                                }
+
+                                val recordButtonColor by transition.animateColor(label = "") { recording ->
+                                    if (recording) Green else Color(0xFF3E5A55)
+                                }
+
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    if (userInputState.isRecording)
+                                        Text(
+                                            text = "< Swipe to delete",
+                                            fontSize = 12.sp,
+                                            maxLines = 1
+                                        )
+                                    IconButton(
+                                        onClick = onRecordClicked,
+                                        interactionSource = userInputState.interactionSource,
+                                        modifier = buttonModifier
+                                            .background(recordButtonColor)
+                                            .size(recordButtonSize)
+                                    ) {
+                                        Icon(
+                                            painter = painterResource(
+                                                id = R.drawable.ic_record
+                                            ),
+                                            contentDescription = null,
+                                            modifier = Modifier.size(24.dp),
+                                            tint = Color.White
+                                        )
+                                    }
+                                }
+
+                            }
                         }
                     }
-
-                    IconButton(
-                        onClick = onRecordClicked,
-                        interactionSource = interactionSource,
-                        modifier = Modifier
-                            .background(color = color, shape = CircleShape)
-                            .size(size)
-                    ) {
-                        Icon(
-                            painter = painterResource(id = R.drawable.ic_record),
-                            contentDescription = null,
-                            modifier = Modifier.size(24.dp),
-                            tint = Color.Black
+                }
+            }
+            androidx.compose.animation.AnimatedVisibility(
+                visible = showSelectAttachmentMenu,
+                modifier = Modifier.fillMaxWidth(),
+                enter = slideInHorizontally { -it },
+                exit = slideOutHorizontally { -it }
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .background(Color(0xFF3E5A55))
+                        .height(62.dp)
+                ) {
+                    SelectAttachmentOption.all.forEach { option ->
+                        OptionButton(
+                            onClick = {
+                                showSelectAttachmentMenu = false
+                                when (option) {
+                                    is SelectAttachmentOption.Document -> onSelectDocument()
+                                    is SelectAttachmentOption.Gallery -> onOpenGallery()
+                                    is SelectAttachmentOption.Camera -> onOpenCamera()
+                                    else -> {}
+                                }
+                            },
+                            iconRes = option.iconRes,
+                            textRes = option.textRes
                         )
                     }
                 }
-
-
-            }
-
-            IconButton(onClick = onSendClicked, enabled = sendButtonEnabled) {
-                Icon(
-                    painter = painterResource(id = R.drawable.ic_send),
-                    contentDescription = null,
-                    modifier = Modifier.size(24.dp),
-                    tint = Color.Black
-                )
             }
         }
     }
-
-
 }
+
+@Composable
+private fun OptionButton(
+    onClick: () -> Unit,
+    iconRes: Int,
+    textRes: Int,
+    modifier: Modifier = Modifier
+) {
+    IconButton(
+        onClick = onClick,
+        modifier = Modifier
+            .background(Color.Transparent)
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(
+                painter = painterResource(id = iconRes),
+                modifier = modifier,
+                contentDescription = null,
+                tint = Color.White
+            )
+            if (textRes != -1)
+                Text(text = stringResource(id = textRes), color = Color.White, fontSize = 12.sp)
+        }
+
+    }
+}
+
+private sealed class SelectAttachmentOption(
+    @DrawableRes val iconRes: Int,
+    @StringRes val textRes: Int
+) {
+    object Document : SelectAttachmentOption(R.drawable.ic_document, R.string.document)
+    object Gallery : SelectAttachmentOption(R.drawable.ic_gallery, R.string.gallery)
+    object Camera : SelectAttachmentOption(R.drawable.ic_camera, R.string.camera)
+    object Location : SelectAttachmentOption(R.drawable.ic_location, R.string.location)
+    object Close : SelectAttachmentOption(R.drawable.ic_close, -1)
+
+    companion object {
+        val all = listOf(
+            Document,
+            Gallery,
+            Camera,
+            Location,
+            Close
+        )
+    }
+}
+
+private enum class SendButtonMode { Send, Record, None }

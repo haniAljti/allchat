@@ -53,7 +53,7 @@ class AllChatLocalRoomDatabaseTest {
     @Test
     fun verifyMessageIsUpdatedWhenStatusHigher() = runTest {
         val message = initialMessage()
-        val user = UserEntity(id = 1, id = "user1")
+        val user = UserEntity(id = "user1", name = "user1")
         val marker = MarkerEntity(
             userId = "user1",
             messageId = message.externalId ?: "1",
@@ -71,7 +71,7 @@ class AllChatLocalRoomDatabaseTest {
     @Test
     fun verifyMarkerAddedAndSavedToEmptyListCorrectly() = runTest {
         val message = initialMessage()
-        val user = UserEntity(id = 1, id = "user1")
+        val user = UserEntity(id = "user1", name = "user1")
         val marker = MarkerEntity(
             userId = "user1",
             messageId = message.externalId ?: "1",

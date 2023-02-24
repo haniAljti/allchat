@@ -7,7 +7,14 @@ import com.hanialjti.allchat.data.local.room.dao.*
 import com.hanialjti.allchat.data.local.room.entity.*
 
 @Database(
-    entities = [UserEntity::class, MessageEntity::class, ChatEntity::class, ParticipantEntity::class, MarkerEntity::class, AvatarEntity::class],
+    entities = [
+        UserEntity::class,
+        MessageEntity::class,
+        ChatEntity::class,
+        ParticipantEntity::class,
+        MarkerEntity::class,
+        InfoEntity::class,
+        BlockedUserEntity::class],
     version = 1
 )
 @TypeConverters(Converters::class)
@@ -17,5 +24,6 @@ abstract class AllChatLocalRoomDatabase : RoomDatabase() {
     abstract fun messageDao(): MessageDao
     abstract fun markerDao(): MessageMarkerDao
     abstract fun participantDao(): ParticipantDao
-    abstract fun avatarDao(): AvatarDao
+    abstract fun infoDao(): InfoDao
+    abstract fun blockedUserDao(): BlockedUserDao
 }

@@ -1,9 +1,7 @@
 package com.hanialjti.allchat.data.remote.xmpp
 
-import com.hanialjti.allchat.data.local.room.entity.MessageEntity
-import com.hanialjti.allchat.data.model.MessageStatus
 import com.hanialjti.allchat.data.model.MessageType
-import com.hanialjti.allchat.data.remote.model.RemoteMessage
+import com.hanialjti.allchat.data.remote.model.RemoteGroupInvitation
 import com.hanialjti.allchat.data.remote.xmpp.model.ChatMarkerWrapper
 import com.hanialjti.allchat.data.remote.xmpp.model.VCard
 import kotlinx.coroutines.Dispatchers
@@ -17,40 +15,37 @@ import org.jivesoftware.smack.packet.Stanza
 import org.jivesoftware.smack.tcp.XMPPTCPConnection
 import org.jivesoftware.smackx.chat_markers.element.ChatMarkersElements
 import org.jivesoftware.smackx.chatstates.ChatState
-import org.jivesoftware.smackx.chatstates.packet.ChatStateExtension
 import org.jivesoftware.smackx.forward.packet.Forwarded
+import org.jivesoftware.smackx.muc.MucConfigFormManager
 import org.jivesoftware.smackx.muc.MultiUserChat
+import org.jivesoftware.smackx.muc.MultiUserChatException.MucConfigurationNotSupportedException
 import org.jivesoftware.smackx.muc.packet.GroupChatInvitation
 import org.jivesoftware.smackx.vcardtemp.VCardManager
+import org.jivesoftware.smackx.xdata.form.FillableForm
 import org.jxmpp.jid.BareJid
 import org.jxmpp.jid.EntityBareJid
-import org.jxmpp.jid.Jid
 import org.jxmpp.jid.impl.JidCreate
 
 
 fun Message.Type.toMessageType() =
     if (this == Message.Type.groupchat) MessageType.GroupChat else MessageType.Chat
 
-fun Jid.isGroupConversation() = this.asDomainBareJid().contains("@conference.")
-
 suspend fun String.asJid(): BareJid =
     withContext(Dispatchers.IO) { return@withContext JidCreate.bareFrom(this@asJid) }
 
-fun Stanza.getStringFrom() = from.localpartOrNull?.toString()
+@Throws(MucConfigurationNotSupportedException::class)
+fun MucConfigFormManager.setPubSubNode(node: String): MucConfigFormManager {
+    val field = MucConfigFormManager::class.java.getDeclaredField("answerForm")
+    field.isAccessible = true
+    val answerForm = field.get(FillableForm::class) as FillableForm
+    answerForm.setAnswer("muc#roomconfig_pubsub", node)
+    return this
+}
 
 fun MessageType.toXmppMessageType() = when (this) {
     MessageType.Chat -> Message.Type.chat
     MessageType.GroupChat -> Message.Type.groupchat
 }
-
-fun MessageEntity.toMessageStanza(connection: XMPPTCPConnection): Message =
-    connection.stanzaFactory
-        .buildMessageStanza()
-        .to(contactId)
-        .ofType(Message.Type.chat)
-        .setBody(body)
-        .addExtension(ChatMarkersElements.MarkableExtension.INSTANCE)
-        .build()
 
 fun ChatState.toConversationState(conversation: String, from: String) = when (this) {
     ChatState.active -> com.hanialjti.allchat.data.model.ChatState.Active(
@@ -69,38 +64,6 @@ fun ChatState.toConversationState(conversation: String, from: String) = when (th
         com.hanialjti.allchat.data.model.ChatState.Paused(conversation, from)
     }
 }
-
-//fun NetworkMessage.toStanzaMessage(
-//    connection: XMPPTCPConnection,
-//    isMarkable: Boolean
-//) = connection.stanzaFactory
-//    .buildMessageStanza()
-//    .to(contactId)
-//    .from(connection.user?.asBareJid()?.toString())
-//    .ofType(type?.toXmppMessageType())
-//    .setBody(body)
-//    .apply {
-//        if (isMarkable) {
-//            addExtension(ChatMarkersElements.MarkableExtension.INSTANCE)
-//        }
-//    }
-//    .build()
-
-fun MessageEntity.toStanzaMessage(
-    connection: XMPPTCPConnection,
-    isMarkable: Boolean
-) = connection.stanzaFactory
-    .buildMessageStanza()
-    .to(contactId)
-    .from(connection.user?.asBareJid()?.toString())
-    .ofType(type?.toXmppMessageType())
-    .setBody(body)
-    .apply {
-        if (isMarkable) {
-            addExtension(ChatMarkersElements.MarkableExtension.INSTANCE)
-        }
-    }
-    .build()
 
 
 fun XMPPTCPConnection.getOwner() = user?.asBareJid()?.toString()
@@ -124,51 +87,33 @@ fun Message.wrapMarker(): ChatMarkerWrapper? = when {
     else -> null
 }
 
-fun Stanza.toAckMessage() = RemoteMessage(
-    id = stanzaId,
-    chatId = from?.asBareJid()?.toString(),
-    body = if (this is Message) body else null,
-    sender = from?.asBareJid()?.toString(),
-    type = getType(),
-    thread = null,
-    messageStatus = MessageStatus.Sent,
-)
-
 fun Stanza.isMessage() = this is Message
-fun Stanza.isChatState() = this.hasExtension(ChatStateExtension.NAMESPACE)
 
 fun Stanza.isMucInvitation() = this.hasExtension(GroupChatInvitation.NAMESPACE)
 
 fun Stanza.fromAsString() = this.from?.asBareJid()?.toString()
 fun Stanza.toAsString() = this.to?.asBareJid()?.toString()
-fun Stanza.fromAsResourceString() = from?.resourceOrNull?.toString()
-
-//fun Stanza.toMessage(connection: XMPPTCPConnection) = MessageEntity(
-//    externalId = stanzaId,
-//    body = if (this is Message) body else null,
-//    contactId = connection.getConversationIdFromStanza(this),
-//    senderId = from?.asBareJid()?.toString(),
-//    ownerId = connection.getOwner(),
-//    type = getType()
-//)
-//
-//fun Stanza.toGroupChatMessage(connection: XMPPTCPConnection) = MessageEntity(
-//    externalId = stanzaId,
-//    body = if (this is Message) body else null,
-//    contactId = from?.asBareJid()?.toString(),
-//    senderId = from?.resourceOrNull?.toString(),
-//    ownerId = connection.getOwner(),
-//    type = getType()
-//)
-
-fun Stanza.getType() = if (this is Message) {
-    type.toMessageType()
-} else null
 
 fun Stanza.isMessageAck(): Boolean =
     this is Message && type != Message.Type.error && to != null && stanzaId != null
 
 fun Forwarded<Message>.timestamp() = delayInformation.stamp.time
+
+fun Message.extractDirectMucInvitation(): RemoteGroupInvitation? {
+
+    if (!hasExtension(GroupChatInvitation.NAMESPACE)) {
+        return null
+    }
+
+    val invitation = getExtension(GroupChatInvitation.NAMESPACE) as GroupChatInvitation
+
+    return RemoteGroupInvitation(
+        id = stanzaId,
+        by = fromAsString(),
+        chatId = invitation.roomAddress
+    )
+
+}
 
 fun XMPPTCPConnection.getConversationIdFromStanza(stanza: Stanza): String? {
     return if (stanza is Message) {
@@ -216,7 +161,11 @@ fun MultiUserChat.inviteDirectly(user: EntityBareJid?) {
 /**
  * @param roomAddress only pass a roomAddress in case you want to set as a MUC VCard
  */
-suspend fun VCardManager.updateVCard(vcard: VCard, connection: XMPPTCPConnection, roomAddress: String? = null) {
+suspend fun VCardManager.updateVCard(
+    vcard: VCard,
+    connection: XMPPTCPConnection,
+    roomAddress: String? = null
+) {
     // XEP-54 § 3.2 "A user may publish or update his or her vCard by sending an IQ of type "set" with no 'to' address…"
 
     // XEP-54 § 3.2 "A user may publish or update his or her vCard by sending an IQ of type "set" with no 'to' address…"
@@ -229,18 +178,4 @@ suspend fun VCardManager.updateVCard(vcard: VCard, connection: XMPPTCPConnection
     // want to use the same stanza id again (although it wouldn't break if we did)
     vcard.setStanzaId()
     connection.createStanzaCollectorAndSend(vcard).nextResultOrThrow<Stanza>()
-}
-
-@Throws(
-    NoResponseException::class,
-    XMPPErrorException::class,
-    NotConnectedException::class,
-    InterruptedException::class
-)
-fun VCardManager.getVCard(bareJid: EntityBareJid?, connection: XMPPTCPConnection): VCard {
-    val vcardRequest =
-        org.jivesoftware.smackx.vcardtemp.packet.VCard()
-    vcardRequest.to = bareJid
-    return connection.createStanzaCollectorAndSend(vcardRequest)
-        .nextResultOrThrow()
 }

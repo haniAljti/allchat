@@ -10,8 +10,6 @@ import androidx.work.Configuration
 import androidx.work.DelegatingWorkerFactory
 import androidx.work.WorkManager
 import com.hanialjti.allchat.data.remote.ConnectionType
-import com.hanialjti.allchat.data.remote.xmpp.model.ConnectionConfig
-import org.jivesoftware.smackx.ping.android.ServerPingWithAlarmManager
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.Koin
 import org.koin.core.KoinApplication
@@ -40,6 +38,7 @@ object AllChat {
                     koin.declare(connectionType.connectionCredentials)
                     koin.loadModules(listOf(xmppModule))
                 }
+                else -> {/*TODO*/}
             }
             modules(
                 appModule,
@@ -50,6 +49,7 @@ object AllChat {
             printLogger(Level.INFO)
         }
         koinApp?.customWorkManagerFactory()
+
         return koinApp as KoinApplication
     }
 

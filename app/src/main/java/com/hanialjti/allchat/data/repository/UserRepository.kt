@@ -1,26 +1,33 @@
 package com.hanialjti.allchat.data.repository
 
 import com.hanialjti.allchat.common.exception.NotAuthenticatedException
+import com.hanialjti.allchat.common.utils.Logger
 import com.hanialjti.allchat.data.local.datastore.UserCredentials
-import com.hanialjti.allchat.data.local.datastore.UserPreferencesManager
-import com.hanialjti.allchat.data.local.room.dao.UserDao
+import com.hanialjti.allchat.data.local.datastore.PreferencesLocalDataStore
+import com.hanialjti.allchat.data.local.room.AllChatLocalRoomDatabase
+import com.hanialjti.allchat.data.local.room.entity.BlockedUserEntity
+import com.hanialjti.allchat.data.local.room.entity.UserEntity
 import com.hanialjti.allchat.data.local.room.entity.asUser
+import com.hanialjti.allchat.data.model.User
 import com.hanialjti.allchat.data.remote.ConnectionManager
 import com.hanialjti.allchat.data.remote.UserRemoteDataSource
-import com.hanialjti.allchat.data.remote.model.CallResult
-import com.hanialjti.allchat.data.remote.model.FullUserInfo
+import com.hanialjti.allchat.data.remote.model.*
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.*
+import java.util.*
 
-class UserRepository constructor(
-    private val localUserDataSource: UserDao,
+class UserRepository(
+    private val localDb: AllChatLocalRoomDatabase,
     private val remoteDataSource: UserRemoteDataSource,
     private val connectionManager: ConnectionManager,
-    private val userPreferencesManager: UserPreferencesManager
+    private val preferencesLocalDataStore: PreferencesLocalDataStore
 ) {
 
-    val connectionStatus = connectionManager.observeConnectivityStatus()
-    val loggedInUser = userPreferencesManager.loggedInUser
+    private val userDao = localDb.userDao()
+    private val blockedUserDao = localDb.blockedUserDao()
+
+    private val connectionStatus = connectionManager.observeConnectivityStatus()
+    val loggedInUser = preferencesLocalDataStore.usernameStream
 
     val connectedUser = connectionStatus.combine(loggedInUser) { connectionStatus, user ->
         return@combine if (connectionStatus == ConnectionManager.Status.Connected) {
@@ -28,33 +35,120 @@ class UserRepository constructor(
         } else null
     }
 
-    suspend fun listenForUsername() {
-        remoteDataSource.listenForUsernameUpdates()
-            .collect()
+    suspend fun getAndSaveUser(userId: String): User {
+        var user: UserEntity? = userDao.findById(userId)
+
+        if (user != null) {
+            return user.asUser()
+        }
+
+        user = UserEntity(id = userId)
+        userDao.insertUser(user)
+
+        return user.asUser()
     }
 
-    suspend fun fetchUserInfo(userId: String): CallResult<FullUserInfo> {
-        return remoteDataSource.getUpdatedUserInfo(userId)
+    suspend fun listenForUserUpdates() {
+        Logger.d { "Listening for user updates" }
+        remoteDataSource.listenForUserUpdates()
+            .collect { userUpdate ->
+                when (userUpdate) {
+//                    is NicknameUpdate -> {
+//                        Logger.d { "New nickname update from ${userUpdate.userId} is ${userUpdate.nickname}" }
+//                        localDb.withTransaction {
+//                            userDao.updateUserName(userUpdate.nickname, userUpdate.userId)
+//                            chatDao.updateName(userUpdate.nickname, userUpdate.userId)
+//                            messageDao.updateSenderName(userUpdate.nickname, userUpdate.userId)
+//                        }
+//                    }
+//                    is AvatarUrlUpdate -> {
+//
+//                    }
+                    is PresenceUpdate -> {
+                        userDao.updatePresence(
+                            userId = userUpdate.userId,
+                            isOnline = userUpdate.presence.isOnline,
+                            lastOnline = userUpdate.presence.lastOnline,
+                            status = userUpdate.presence.status
+                        )
+                    }
+                    is NewUserUpdate -> {
+
+                    }
+//                    is AvatarMetaDataUpdate -> {
+//                        Logger.d { "New avatar update from ${userUpdate.userId} is ${userUpdate.hash}" }
+//                        val existingAvatar =
+//                            avatarDao.getAvatarByHashAndUserId(userUpdate.hash, userUpdate.userId)
+//                        if (existingAvatar == null) {
+//                            val response =
+//                                remoteDataSource.fetchAvatarData(userUpdate.userId, userUpdate.hash)
+//                            if (response is CallResult.Success) {
+//                                response.data?.let {
+//                                    //TODO use a worker
+//                                    val decodedData = Base64.getDecoder().decode(it)
+//                                    val imageFile = fileRepository.createNewAvatarFile("${userUpdate.userId}.png")
+//                                    val uri = fileRepository.downloadAndSaveToInternalStorage(
+//                                        decodedData,
+//                                        imageFile
+//                                    )?.toString() ?: return@let
+//
+//                                    avatarDao.insertAvatar(
+//                                        InfoEntity(userUpdate.userId, uri, userUpdate.hash)
+//                                    )
+//                                    chatDao.updateAvatar(uri, userUpdate.userId)
+//                                }
+//                            }
+//                        }
+//                    }
+                }
+            }
     }
 
-    suspend fun updateUserInfo(username: String) {
-        remoteDataSource.updateUserInfo(username)
+    suspend fun blockUser(userId: String) {
+        val owner = preferencesLocalDataStore.username() ?: return
+        val blockResult = remoteDataSource.blockUser(userId)
+        if (blockResult is CallResult.Success) {
+            blockedUserDao.insertBlockedUser(BlockedUserEntity(userId, owner))
+        }
+    }
+
+    suspend fun unblockUser(userId: String) {
+        val owner = preferencesLocalDataStore.username() ?: return
+        val blockResult = remoteDataSource.unblockUser(userId)
+        if (blockResult is CallResult.Success) {
+            blockedUserDao.removeBlockedUser(BlockedUserEntity(userId, owner))
+        }
+    }
+
+    fun isBlocked(userId: String): Flow<Boolean> = loggedInUser.transform { owner ->
+        if (owner != null)
+            blockedUserDao.fetchBlockedUserFlow(userId, owner)
+                .collect { emit(it != null) }
+        else emptyFlow<Boolean>()
+    }
+
+    suspend fun updateUserNickname(username: String) {
+        remoteDataSource.updateNickname(username)
+    }
+
+    suspend fun updateAvatar(avatar: ByteArray?) {
+        remoteDataSource.updateAvatar(avatar)
     }
 
     suspend fun login(userCredentials: UserCredentials? = null) {
 
-        val credentials = userCredentials ?: userPreferencesManager.userCredentials.firstOrNull()
+        val credentials = userCredentials ?: preferencesLocalDataStore.userCredentials.firstOrNull()
         ?: throw NotAuthenticatedException("not authenticated", null)
 
         connectionManager.connect(credentials)
 
         if (userCredentials != null) {
-            userPreferencesManager.updateUserCredentials(userCredentials)
+            preferencesLocalDataStore.updateUserCredentials(userCredentials)
         }
 
-        val loggedInUser = connectionManager.getUsername()
+        val loggedInUser = connectionManager.userId
 
-        userPreferencesManager.updateLoggedInUser(loggedInUser)
+        preferencesLocalDataStore.updateLoggedInUser(loggedInUser)
     }
 
 //    private suspend fun saveUserInfoInPreferences() {
@@ -82,9 +176,9 @@ class UserRepository constructor(
     }
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    fun getAllUsersByOwnerId() = connectionManager.loggedInUser.flatMapLatest {
+    fun getAllUsersByOwnerId() = loggedInUser.flatMapLatest {
         it?.let {
-            localUserDataSource
+            userDao
                 .getAllByOwnerId(it)
                 .map { allUsers ->
                     allUsers.map { userEntry -> userEntry.asUser() }
@@ -93,7 +187,7 @@ class UserRepository constructor(
     }
 
 
-    suspend fun user(userId: String) = localUserDataSource.getById(userId)?.asUser()
+    suspend fun user(userId: String) = userDao.getById(userId)?.asUser()
 
 //    suspend fun updateAndInsertUser(user: User) {
 //        val updatedInfo = remoteDataSource.getUpdatedUserInfo(user.id)
@@ -104,5 +198,5 @@ class UserRepository constructor(
 //        localUserDataSource.updateUser(updatedUser)
 //    }
 
-    suspend fun getUsers(userIds: List<String>) = localUserDataSource.getUsers(userIds)
+    suspend fun getUsers(userIds: List<String>) = userDao.getUsers(userIds)
 }

@@ -11,7 +11,7 @@ import com.hanialjti.allchat.presentation.conversation.ContactImage
 @Entity(tableName = "chats")
 data class ChatEntity(
     @PrimaryKey
-    val id: String,             // id in the remote service eg. for xmpp its jid
+    val id: String,
     val owner: String,
     @ColumnInfo(name = "is_group_chat")
     val isGroupChat: Boolean = false,

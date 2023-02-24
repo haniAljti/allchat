@@ -2,8 +2,12 @@ package com.hanialjti.allchat.common.utils
 
 import android.os.Build
 
-inline fun <T> sdk26AndUp(onSdk26AndUp: () -> T): T? {
-    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        onSdk26AndUp()
+object ApplicationUtils {
+    var isInBackground: Boolean = true
+}
+
+inline fun <T> sdkEqualsOrUp(sdk: Int, onSdk31AndUp: () -> T): T? {
+    return if (Build.VERSION.SDK_INT >= sdk) {
+        onSdk31AndUp()
     } else null
 }

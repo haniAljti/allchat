@@ -9,9 +9,9 @@ class MessageTasksDataSourceImpl(
     private val workManager: WorkManager
 ): MessageTasksDataSource {
 
-    private fun createSendMessageWorkRequest(messageId: Long) =
+    private fun createSendMessageWorkRequest() =
         OneTimeWorkRequestBuilder<SendMessageWorker>()
-            .setInputData(workDataOf(SendMessageWorker.MESSAGE_ID_KEY to messageId))
+//            .setInputData(workDataOf(SendMessageWorker.MESSAGE_ID_KEY to messageId))
             .setConstraints(
                 Constraints.Builder()
                     .setRequiredNetworkType(NetworkType.CONNECTED)
@@ -25,12 +25,12 @@ class MessageTasksDataSourceImpl(
             .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
             .build()
 
-    override fun createAndExecuteSendMessageWork(messageId: Long) {
-        val workRequest = createSendMessageWorkRequest(messageId)
-        enqueueWorkRequest(workRequest, messageId.toString())
+    override fun sendQueuedMessages() {
+        val workRequest = createSendMessageWorkRequest()
+        workManager.enqueueUniqueWork(
+            "send-queued-messages",
+            ExistingWorkPolicy.REPLACE, workRequest
+        )
     }
 
-    private fun enqueueWorkRequest(workRequest: OneTimeWorkRequest, workName: String) {
-        workManager.enqueueUniqueWork(workName, ExistingWorkPolicy.REPLACE, workRequest)
-    }
 }

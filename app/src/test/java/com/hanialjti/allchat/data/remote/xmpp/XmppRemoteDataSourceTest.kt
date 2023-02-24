@@ -5,8 +5,6 @@ import com.hanialjti.allchat.data.local.room.entity.MessageEntity
 import com.hanialjti.allchat.data.model.MessageType
 import com.hanialjti.allchat.data.model.MessageStatus
 import com.hanialjti.allchat.data.remote.model.CallResult
-import com.hanialjti.allchat.data.remote.xmpp.model.PingConfigurations
-import com.hanialjti.allchat.data.remote.xmpp.model.XmppConnectionConfig
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.*
@@ -40,14 +38,6 @@ class XmppRemoteDataSourceTest {
     fun setupConnection() {
         xmppRemoteDataSource = XmppRemoteDataSource(
             firstConnection,
-            XmppConnectionConfig(
-                host = "192.168.0.42",
-                domain = "localhost",
-                port = 5222,
-                pingConfigurations = PingConfigurations.DisablePingMessages,
-                chatMarkersEnabled = true,
-                enableChatStateNotifications = true
-            ),
             mainDispatcherRule.testDispatcher
         )
     }
@@ -63,6 +53,7 @@ class XmppRemoteDataSourceTest {
                 contactId = "hani2@localhost",
                 type = MessageType.Chat
             ),
+            null,
             true
         )
 
@@ -85,6 +76,7 @@ class XmppRemoteDataSourceTest {
                 contactId = "ebb76127-17f9-437f-bde5-cceb2efc3215@conference.localhost",
                 type = MessageType.GroupChat
             ),
+            null,
             true
         )
 

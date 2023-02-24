@@ -13,7 +13,6 @@ data class RemoteUser(
 ) : RemoteUserItem
 
 data class RemotePresence(
-    val id: String,
     val isOnline: Boolean,
     val status: String?,
     val lastOnline: OffsetDateTime? = null
@@ -24,11 +23,11 @@ data class FullUserInfo(
     val presence: RemotePresence
 )
 
-sealed interface UserUpdate {
-    class NameUpdate(val userId: String, val name: String) : UserUpdate
-    class UrlImageUpdate(val userId: String, val imageUrl: String) : UserUpdate
-    class BinaryImageUpdate(val userId: String, val imageInfo: ImageInfo) : UserUpdate
-}
+//sealed interface UserUpdate {
+//    class NameUpdate(val userId: String, val name: String) : UserUpdate
+//    class UrlImageUpdate(val userId: String, val imageUrl: String) : UserUpdate
+//    class BinaryImageUpdate(val userId: String, val imageInfo: ImageInfo) : UserUpdate
+//}
 
 data class ImageInfo(
     val sizeInBytes: Int,

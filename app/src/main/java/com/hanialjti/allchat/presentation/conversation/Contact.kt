@@ -1,5 +1,6 @@
 package com.hanialjti.allchat.presentation.conversation
 
+import android.net.Uri
 import androidx.annotation.DrawableRes
 import androidx.annotation.PluralsRes
 import androidx.annotation.StringRes
@@ -18,9 +19,11 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.core.net.toFile
 import coil.compose.rememberAsyncImagePainter
 import coil.request.ImageRequest
 import com.hanialjti.allchat.R
+import java.io.File
 
 sealed class ContactImage {
     class DynamicImage(val imageCacheUri: String) : ContactImage()
@@ -37,7 +40,7 @@ sealed class ContactImage {
                     ImageRequest
                         .Builder(LocalContext.current)
                         .size(50, 50)
-                        .data(imageCacheUri)
+                        .data(Uri.parse(imageCacheUri).toFile())
                         .build()
                 ),
                 contentDescription = null,
@@ -50,7 +53,7 @@ sealed class ContactImage {
             contentDescription = null,
             colorFilter = ColorFilter.tint(MaterialTheme.colors.primary),
             modifier = modifier
-                .border(width = 3.dp, color = MaterialTheme.colors.primary, shape = CircleShape)
+                .border(width = 1.dp, color = MaterialTheme.colors.primary, shape = CircleShape)
                 .clip(CircleShape)
         )
     }

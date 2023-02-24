@@ -27,7 +27,7 @@ class CreateChatRoomWorker(
         val chatRoomId = parameters.inputData.getString(CONTACT_ID_KEY) ?: return Result.failure()
 
         val chatRoomResult = connectionManager.registerWorker(this) {
-           conversationRepository.addChatRoomToRemoteContacts(chatRoomId)
+           conversationRepository.createChatRoom(chatRoomId)
         }
 
         return when (chatRoomResult) {

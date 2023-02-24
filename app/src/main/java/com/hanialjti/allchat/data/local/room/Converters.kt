@@ -14,34 +14,24 @@ class Converters {
     private val formatter = DateTimeFormatter.ISO_OFFSET_DATE_TIME
 
     @TypeConverter
-    fun imageAttachmentToString(image: ImageAttachment?) = Json.encodeToString(image)
+    fun attachmentTypeToString(attachmentType: Attachment.Type) = attachmentType.value
 
     @TypeConverter
-    fun imageAttachmentFromString(value: String): ImageAttachment? = Json.decodeFromString(value)
+    fun attachmentTypeFromString(value: Int): Attachment.Type = Attachment.Type.fromValue(value)
 
     @TypeConverter
-    fun audioAttachmentToString(audio: AudioAttachment?) = Json.encodeToString(audio)
+    fun attachmentToString(attachment: Attachment?) = attachment?.let { Json.encodeToString(AttachmentSerializer, attachment) }
 
     @TypeConverter
-    fun audioAttachmentFromString(value: String): AudioAttachment? = Json.decodeFromString(value)
+    fun attachmentFromString(value: String?): Attachment? = value?.let { Json.decodeFromString(AttachmentSerializer, value) }
 
     @TypeConverter
-    fun locationAttachmentToString(location: LocationAttachment?) = Json.encodeToString(location)
+    fun messageSummaryToString(message: MessageSummary?) = message?.let { Json.encodeToString(message) }
 
     @TypeConverter
-    fun locationAttachmentFromString(value: String): LocationAttachment? = Json.decodeFromString(value)
-
-    @TypeConverter
-    fun fileAttachmentToString(file: FileAttachment?) = Json.encodeToString(file)
-
-    @TypeConverter
-    fun fileAttachmentFromString(value: String): FileAttachment? = Json.decodeFromString(value)
-
-    @TypeConverter
-    fun messageSummaryToString(message: MessageSummary?) = Json.encodeToString(message)
-
-    @TypeConverter
-    fun messageSummaryFromString(value: String): MessageSummary? = Json.decodeFromString(value)
+    fun messageSummaryFromString(value: String?): MessageSummary? = value?.let {
+        Json.decodeFromString(it)
+    }
 
     @TypeConverter
     fun setToString(set: Set<String>?) = set?.joinToString(",")

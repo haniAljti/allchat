@@ -10,7 +10,7 @@ import kotlinx.coroutines.flow.Flow
 
 interface MessageRemoteDataSource {
 
-    fun listenForMessageChanges(): Flow<RemoteMessageItem>
+    fun messageChangesStream(): Flow<RemoteMessageItem>
     suspend fun updateMarkerForMessage(message: RemoteMessage, marker: Marker): CallResult<String>
 
     /**
@@ -20,8 +20,7 @@ interface MessageRemoteDataSource {
      * @param isMarkable if the message is a markable one. meaning, should other user send a read or delivered marker
      * @return A CallResult object with the sent message id
      */
-    suspend fun sendMessage(message: MessageEntity, isMarkable: Boolean): CallResult<String>
-    suspend fun getOfflineMessages(): List<RemoteMessage>
+    suspend fun sendMessage(message: MessageEntity, thread: String?, isMarkable: Boolean): CallResult<String>
     suspend fun getPreviousPage(
         chatId: String,
         oldestMessage: RemoteMessage?,

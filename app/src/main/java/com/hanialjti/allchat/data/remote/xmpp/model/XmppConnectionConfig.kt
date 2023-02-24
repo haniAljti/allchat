@@ -8,11 +8,12 @@ data class XmppConnectionConfig(
     val host: String,
     val domain: String,
     val port: Int = 5222,
-    val pingConfigurations: PingConfigurations = PingConfigurations.EnablePingMessages(
-        intervalInSeconds = 30
-    ),
+//    val pingConfigurations: PingConfigurations = PingConfigurations.EnablePingMessages(
+//        intervalInSeconds = 30
+//    ),
     override val chatMarkersEnabled: Boolean = true,
     val enableChatStateNotifications: Boolean = true,
+    val useForegroundService: Boolean = true
 ): ConnectionConfig(chatMarkersEnabled)
 
 sealed interface PingConfigurations {

@@ -1,11 +1,14 @@
 package com.hanialjti.allchat.presentation
 
+import android.Manifest
+import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -15,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -26,9 +30,10 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navOptions
 import com.google.accompanist.navigation.material.ExperimentalMaterialNavigationApi
 import com.google.accompanist.navigation.material.rememberBottomSheetNavigator
+import com.google.accompanist.permissions.rememberPermissionState
 import com.hanialjti.allchat.di.getViewModel
 import com.hanialjti.allchat.data.local.datastore.UserCredentials
-import com.hanialjti.allchat.di.UserController
+import com.hanialjti.allchat.data.tasks.ChatForegroundService
 import com.hanialjti.allchat.di.get
 import com.hanialjti.allchat.presentation.ui.NavigationLayout
 import com.hanialjti.allchat.presentation.ui.screens.Screen
@@ -37,7 +42,6 @@ import com.hanialjti.allchat.presentation.ui.skin.AllChatConversationScreenSkin
 import com.hanialjti.allchat.presentation.ui.skin.DefaultChatScreenSkin
 import com.hanialjti.allchat.presentation.ui.skin.DefaultConversationScreenSkin
 import com.hanialjti.allchat.presentation.ui.theme.AllChatTheme
-import org.jivesoftware.smackx.ping.android.ServerPingWithAlarmManager
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -68,11 +72,26 @@ fun AllChat(
     val mainViewModel = getViewModel<MainViewModel>()
     val connectionObserver = get<ConnectionLifeCycleObserver>()
     val mainUiState by remember(mainViewModel) { mainViewModel.uiState }.collectAsState()
+    val context = LocalContext.current
+    val notificationPermissionState = rememberPermissionState(
+        permission = Manifest.permission.POST_NOTIFICATIONS
+    )
+
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            notificationPermissionState.launchPermissionRequest()
+        }
+    }
 
     LaunchedEffect(userCredentials) {
         if (userCredentials != null) {
             mainViewModel.updateUserCredentials(userCredentials)
         }
+    }
+
+    LaunchedEffect(Unit) {
+        val chatForegroundService = Intent(context, ChatForegroundService::class.java)
+        context.startService(chatForegroundService)
     }
 
     DisposableEffect(
@@ -86,7 +105,7 @@ fun AllChat(
                     AnimatedVisibility(
                         visible = navItems.any { it.route == currentNavRoute },
                         enter = slideInVertically(initialOffsetY = { it }),
-                        exit = slideOutVertically(targetOffsetY = { it })
+                        exit = ExitTransition.None
                     ) {
                         BottomNavigation(
                             backgroundColor = Color.Transparent,
@@ -168,6 +187,7 @@ fun AllChat(
         }
     }
 }
+
 
 @Composable
 fun Lifecycle.observeAsState(): State<Lifecycle.Event> {

@@ -11,10 +11,13 @@ import kotlinx.coroutines.flow.Flow
 import timber.log.Timber
 
 interface ConnectionManager {
+
     val loggedInUser: Flow<String?>
 
+    val userId: String?
+    val clientId: String?
+
     fun observeConnectivityStatus(): Flow<Status>
-    fun getUsername(): String?
     fun getConfig(): ConnectionConfig
     suspend fun connect(userCredentials: UserCredentials)
     suspend fun disconnect()

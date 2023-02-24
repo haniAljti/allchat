@@ -2,11 +2,10 @@ package com.hanialjti.allchat.data.local.room.dao
 
 import androidx.paging.PagingSource
 import androidx.room.*
-import androidx.room.OnConflictStrategy.REPLACE
+import androidx.room.OnConflictStrategy.Companion.REPLACE
 import com.hanialjti.allchat.data.local.room.entity.MessageEntity
 import com.hanialjti.allchat.data.local.room.entity.hasLesserValueThan
-import com.hanialjti.allchat.data.local.room.model.MessageEntry
-import com.hanialjti.allchat.data.model.Marker
+import com.hanialjti.allchat.data.model.Attachment
 import com.hanialjti.allchat.data.model.MessageStatus
 import kotlinx.coroutines.flow.Flow
 import java.time.OffsetDateTime
@@ -51,14 +50,17 @@ interface MessageDao {
     @Update
     suspend fun updateMessage(message: MessageEntity)
 
-    @Query("UPDATE messages SET status = :status WHERE message_id = :messageId")
-    suspend fun updateMessageStatus(messageId: Int, status: MessageStatus)
+    @Query("UPDATE messages SET status = :status WHERE id = :messageId")
+    suspend fun updateMessageStatus(messageId: String, status: MessageStatus)
+
+    @Query("UPDATE messages SET sender_name = :name WHERE sender_id = :userId")
+    suspend fun updateSenderName(name: String, userId: String)
 
     @Insert(onConflict = REPLACE)
     suspend fun insertOrReplace(message: MessageEntity): Long
 
     @Transaction
-    suspend fun upsertMessageStatus(messageId: Int, status: MessageStatus) {
+    suspend fun upsertMessageStatus(messageId: String, status: MessageStatus) {
         val existingMessage = getMessageById(messageId)
 
         if (existingMessage != null) {
@@ -70,7 +72,7 @@ interface MessageDao {
 
     @Transaction
     suspend fun upsertMessage(message: MessageEntity) {
-        val existingMessage = getMessageByRemoteId(message.externalId)
+        val existingMessage = getMessageByRemoteId(message.id)
 
         if (existingMessage == null) {
             insertOrReplace(message)
@@ -82,24 +84,57 @@ interface MessageDao {
             updateMessage(
                 existingMessage.copy(
                     status = status,
-                    archiveId = message.archiveId
+                    archiveId = message.archiveId,
+                    attachment = message.attachment,
+                    thread = message.thread
                 )
             )
 
         }
     }
 
-    @Query("SELECT * FROM messages WHERE status = 0 OR status = 1 AND owner_id = :owner")
+    @Query("UPDATE messages SET attachment = :attachment WHERE id = :messageId")
+    suspend fun updateAttachment(attachment: Attachment, messageId: String?)
+
+    @Query("SELECT * FROM messages WHERE status = 0 OR status = 1 AND owner_id = :owner ORDER BY timestamp ASC")
     suspend fun getPendingMessagesByOwner(owner: String): List<MessageEntity>
 
-    @Query("SELECT * FROM messages WHERE external_id = :remoteId")
+    @Query("SELECT * FROM messages WHERE id = :remoteId")
     suspend fun getMessageByRemoteId(remoteId: String?): MessageEntity?
 
-    @Query("SELECT * FROM messages WHERE external_id = :remoteId")
+    @Query("SELECT * FROM messages WHERE id = :remoteId")
+    fun getMessageFlowByRemoteId(remoteId: String?): Flow<MessageEntity>?
+
+    @Query("SELECT * FROM messages WHERE id = :remoteId")
     suspend fun getMessageEntryByRemoteId(remoteId: String?): MessageEntity?
 
     @Query("select * from messages WHERE owner_id = :owner ORDER BY message_archive_id desc limit 1")
     suspend fun getMostRecentMessage(owner: String): MessageEntity?
+
+    @Query("select * from messages WHERE owner_id = :owner AND contact_id = :chatId ORDER BY message_archive_id desc limit 1")
+    fun getMostRecentMessageFlow(owner: String, chatId: String): Flow<MessageEntity?>
+
+    @Query(
+        """
+        SELECT * FROM messages 
+        WHERE owner_id = :owner 
+        AND contact_id = :chatId 
+        AND message_archive_id IS NOT NULL 
+        ORDER BY timestamp DESC limit 1
+        """
+    )
+    suspend fun getMostRecentMessageByChatId(owner: String, chatId: String): MessageEntity?
+
+    @Query(
+        """
+        SELECT * FROM messages 
+        WHERE owner_id = :owner 
+        AND contact_id = :chatId 
+        AND message_archive_id IS NOT NULL 
+        ORDER BY timestamp ASC limit 1
+        """
+    )
+    suspend fun getFirstMessageByChatId(owner: String, chatId: String): MessageEntity?
 
     @Query(
         "SELECT * FROM messages " +
@@ -110,6 +145,6 @@ interface MessageDao {
     )
     fun getLastMessageNotSendByOwner(owner: String, conversation: String): Flow<MessageEntity>
 
-    @Query("SELECT * FROM messages WHERE message_id = :messageId")
-    suspend fun getMessageById(messageId: Int): MessageEntity?
+    @Query("SELECT * FROM messages WHERE id = :messageId")
+    suspend fun getMessageById(messageId: String): MessageEntity?
 }

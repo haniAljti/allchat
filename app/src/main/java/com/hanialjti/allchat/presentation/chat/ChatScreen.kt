@@ -4,18 +4,22 @@ import android.Manifest
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
+import android.os.Build
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.DrawableRes
+import androidx.annotation.RequiresApi
 import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.*
@@ -32,6 +36,7 @@ import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.FileProvider
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.navigation.NavHostController
@@ -43,22 +48,30 @@ import com.google.accompanist.permissions.PermissionStatus
 import com.google.accompanist.permissions.rememberPermissionState
 import com.hanialjti.allchat.R
 import com.hanialjti.allchat.common.utils.*
+import com.hanialjti.allchat.data.model.Attachment
+import com.hanialjti.allchat.data.model.Media
 import com.hanialjti.allchat.data.model.MessageItem
 import com.hanialjti.allchat.data.model.MessageStatus
+import com.hanialjti.allchat.data.remote.model.DownloadProgress
+import com.hanialjti.allchat.data.remote.model.UploadProgress
 import com.hanialjti.allchat.di.getViewModel
 import com.hanialjti.allchat.presentation.component.*
 import com.hanialjti.allchat.presentation.conversation.ContactImage
+import com.hanialjti.allchat.presentation.preview_attachment.PreviewAndSendAttachment
+import com.hanialjti.allchat.presentation.ui.toImagePreviewScreen
 import com.hanialjti.allchat.presentation.ui.toInviteUsersScreen
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.koin.core.parameter.parametersOf
-import timber.log.Timber
+import java.io.File
 import java.time.LocalDateTime
-import java.util.UUID
 
 
-@OptIn(ExperimentalMaterialApi::class, ExperimentalPermissionsApi::class)
+@RequiresApi(Build.VERSION_CODES.Q)
+@OptIn(
+    ExperimentalPermissionsApi::class,
+    ExperimentalAnimationApi::class
+)
 @Composable
 fun ChatScreen(
     navController: NavHostController,
@@ -67,15 +80,13 @@ fun ChatScreen(
     viewModel: ChatViewModel = getViewModel(parameters = { parametersOf(contactId, isGroupChat) })
 ) {
 
-    val uiState by remember(viewModel) { viewModel.uiState }.collectAsState()
-    val messages = remember(viewModel) { viewModel.messages }.collectAsLazyPagingItems()
-    val showChatMenu = remember { mutableStateOf(false) }
+    val uiState by viewModel.uiState.collectAsState()
+    val messages = viewModel.messages.collectAsLazyPagingItems()
+    var showChatMenu by remember { mutableStateOf(false) }
 
-    val bottomSheetState =
-        rememberModalBottomSheetState(initialValue = ModalBottomSheetValue.Hidden)
     val coroutine = rememberCoroutineScope()
     val context = LocalContext.current
-    val lifecycleOwner by rememberUpdatedState(newValue = LocalLifecycleOwner.current)
+    val lifecycleOwner by rememberUpdatedState(LocalLifecycleOwner.current)
     val mediaPlayerState = rememberMediaPlayerState()
     val mediaRecorderState = rememberMediaRecorderState()
 
@@ -83,267 +94,286 @@ fun ChatScreen(
         permission = Manifest.permission.RECORD_AUDIO
     )
 
-    val mediaPickerLauncher = context.mediaPickerLauncher(
-        coroutineScope = coroutine,
-        onImageSelected = viewModel::updateAttachment
-    )
-
-    val cameraLauncher = context.cameraLauncher(
-        coroutineScope = coroutine,
-        onImageTaken = viewModel::updateAttachment
-    )
-
-    val openPdfDocumentLauncher = context.openPdfDocumentLauncher(
-        onPdfAttachmentSelected = {
-            viewModel.updateAttachment(it)
-            viewModel.sendMessage()
-        }
-    )
-
-    ModalBottomSheetLayout(
-        sheetContent = {
-            OpenFilePickerSheetLayout(
-                coroutine,
-                bottomSheetState,
-                mediaPickerLauncher,
-                cameraLauncher,
-                openPdfDocumentLauncher
-            )
-        },
-        sheetState = bottomSheetState,
-        sheetShape = RoundedCornerShape(topEndPercent = 15, topStartPercent = 15)
-    ) {
-        DisposableEffect(
-            Box {
-
-                Column {
-                    ChatTopBar(
-                        name = uiState.name,
-                        status = uiState.status?.asString(),
-                        image = uiState.image,
-                        chatMenuExpanded = showChatMenu.value,
-                        onChatMenuDismissed = { showChatMenu.value = false },
-                        inviteUsersOptionEnabled = isGroupChat,
-                        onInviteUsersClicked = { navController.toInviteUsersScreen(contactId) },
-                        onBackClicked = { navController.popBackStack() },
-                        onPersonClicked = { /*TODO*/ },
-                        onMenuClicked = { showChatMenu.value = true }
+    val mediaPickerLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+            uri?.let {
+                viewModel.updateAttachment(
+                    Media(
+                        cacheUri = uri.toString(),
+                        type = Attachment.Type.Image
                     )
+                )
+            }
+        }
 
-                    MessagesList(
-                        messages = messages,
-                        trackPositions = uiState.trackPositions,
+    val cameraLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.TakePicture()
+    ) { isSaved ->
+        if (isSaved)
+            viewModel.updateAttachment(
+                Media(
+                    type = Attachment.Type.Image,
+                    cacheUri = uiState.lastCreatedTempFile?.path
+                )
+            )
+        else viewModel.deleteCameraTempFile()
+    }
+
+    val openPdfDocumentLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+
+            if (uri != null) {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+
+                viewModel.updateAttachment(
+                    Media(
+                        cacheUri = uri.toString(),
+                        type = Attachment.Type.Document,
+                    )
+                )
+            }
+
+        }
+
+    BackHandler(enabled = uiState.attachment != null) {
+        viewModel.updateAttachment(null)
+    }
+
+    DisposableEffect(
+        Box {
+
+            Column {
+                ChatTopBar(
+                    name = uiState.name,
+                    status = uiState.status?.asString(),
+                    image = uiState.image,
+                    onBackClicked = { navController.popBackStack() },
+                    onPersonClicked = { /*TODO*/ },
+                    onMenuClicked = { showChatMenu = true }
+                ) {
+                    DropdownMenu(
                         modifier = Modifier
-                            .fillMaxSize()
-                            .weight(1f),
-                        onResumeAudio = { recording ->
-                            mediaPlayerState.playMedia(
-                                recording,
-                                uiState.trackPositions[recording.cacheUri]
+                            .width(200.dp)
+                            .background(
+                                color = MaterialTheme.colors.background,
+                                shape = RoundedCornerShape(15.dp)
                             )
-                            recording.cacheUri?.let { viewModel.updateTrackPosition(it, 0) }
-                        },
-                        onPauseAudio = { recording ->
-                            val stoppedAt = mediaPlayerState.pauseMedia()
-                            recording.cacheUri?.let {
-                                viewModel.updateTrackPosition(
-                                    it,
-                                    stoppedAt
-                                )
-                            }
-                        },
-                        onAudioSeekValueChanged = { recording, seekValue ->
-                            recording.cacheUri?.let {
-                                viewModel.updateTrackPosition(
-                                    it,
-                                    seekValue
-                                )
-                            }
-                        },
-                        onPdfClicked = { pdf ->
-                            val uri = Uri.parse(pdf.cacheUri)
-                            val openPdfIntent = Intent(Intent.ACTION_VIEW)
-                            openPdfIntent.setDataAndType(uri, "application/pdf")
-                            openPdfIntent.flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
+                            .border(
+                                width = 1.dp,
+                                color = Color.White,
+                                shape = RoundedCornerShape(15.dp)
+                            ),
+                        expanded = showChatMenu,
+                        onDismissRequest = { showChatMenu = false }
+                    ) {
 
-                            val chooserIntent = Intent
-                                .createChooser(
-                                    openPdfIntent,
-                                    context.getString(R.string.choose_pdf_title)
-                                )
+                        if (isGroupChat) {
+                            DropdownMenuItem(
+                                onClick = { navController.toInviteUsersScreen(contactId) }
+                            ) {
+                                Text("Invite Users")
+                            }
+                        } else {
+                            DropdownMenuItem(
+                                onClick = {
+                                    if (uiState.isBlocked) viewModel.unblockUser()
+                                    else viewModel.blockUser()
+                                }
+                            ) {
+                                Text(if (uiState.isBlocked) "Unblock user" else "Block user")
+                            }
+                        }
 
+                    }
+                }
+
+                MessagesList(
+                    messages = messages,
+                    messageListState = messages.rememberLazyListState(),
+                    uploadProgress = uiState.uploadProgresses,
+                    downloadProgress = uiState.downloadProgresses,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .weight(1f),
+                    onResumeAudio = { message, seekValue ->
+                        if ((message.attachment as Media).cacheUri == null) {
+                            viewModel.downloadAttachment(message)
+                        } else {
+                            mediaPlayerState.playMedia(
+                                message.attachment,
+                                seekValue
+                            )
+                        }
+                    },
+                    onPauseAudio = { mediaPlayerState.pauseMedia() },
+                    onDocumentClicked = { message ->
+                        if ((message.attachment as Media).cacheUri == null) {
+                            viewModel.downloadAttachment(message)
+                        } else {
+                            context.openDocumentWithChooser(message.attachment)
+                        }
+                    },
+                    onImageClicked = { messageId ->
+                        navController.toImagePreviewScreen(messageId)
+                    },
+                    currentlyPlaying = mediaPlayerState.activeRecording,
+                    lastReadMessage = viewModel::updateLastReadMessage,
+                    replyTo = viewModel::updateReplyingTo
+                )
+
+            }
+
+            TextInput(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.BottomEnd)
+                    .background(Color(0xFF111A14)),
+                message = uiState.textInput,
+                attachment = uiState.attachment,
+                onMessageChanged = viewModel::updateTextInput,
+                onOpenGallery = {
+                    mediaPickerLauncher.launch(
+                        PickVisualMediaRequest(
+                            ActivityResultContracts.PickVisualMedia.ImageOnly
+                        )
+                    )
+                },
+                onOpenCamera = {
+                    //TODO handle null file
+                    val tempFile = viewModel.createNewTempFile(".jpg")
+                    viewModel.updateTempFile(tempFile)
+                    val fileUri = tempFile?.let {
+                        FileProvider.getUriForFile(
+                            context,
+                            "${context.packageName}.provider",
+                            it
+                        )
+                    }
+                    cameraLauncher.launch(fileUri)
+                },
+                onSelectDocument = { openPdfDocumentLauncher.launch(arrayOf("application/*")) },
+                onRecordClicked = {
+                    when (recordAudioPermissionState.status) {
+                        is PermissionStatus.Denied -> {
+                            recordAudioPermissionState.launchPermissionRequest()
+                        }
+                        else -> {}
+                    }
+                },
+                onRecordingCancelled = { mediaRecorderState.cancelRecording() },
+                onRecordingStarted = {
+                    when (recordAudioPermissionState.status) {
+                        is PermissionStatus.Denied -> {
+                            recordAudioPermissionState.launchPermissionRequest()
+                        }
+                        PermissionStatus.Granted -> {
+                            //TODO handle null file
+                            val tempFile = viewModel.createNewTempFile(".m4a")
+                            viewModel.updateTempFile(tempFile)
+                            tempFile?.let { mediaRecorderState.startRecording(it) }
+                        }
+                    }
+                },
+                onRecordingEnded = {
+                    if (recordAudioPermissionState.status == PermissionStatus.Granted) {
+                        coroutine.launch {
                             try {
-                                context.startActivity(chooserIntent)
-                            } catch (e: ActivityNotFoundException) {
+
+                                val recording = mediaRecorderState.stopRecording() as Media
+                                viewModel.updateAttachment(
+                                    recording.copy(
+                                        cacheUri = uiState.lastCreatedTempFile?.path,
+                                        type = Attachment.Type.Audio
+                                    )
+                                )
+                                viewModel.sendMessage()
+                            } catch (e: java.io.IOException) {
                                 e.printStackTrace()
                             }
-                        },
-                        onImageClicked = { message ->
-//                            navController.toImagePreviewScreen(message.id)
-                        },
-                        activeMessage = mediaPlayerState.activeRecording.value,
-                        onAttachmentDownloaded = { message, uri ->
-                            viewModel.saveMessageContentUri(message, uri)
-                        },
-                        lastReadMessage = viewModel::updateLastReadMessage
+                        }
+                    }
+                },
+                onSendClicked = viewModel::sendMessage,
+                replyingTo = uiState.replyingTo,
+                onReplyToCleared = { viewModel.updateReplyingTo(null) }
+            )
+
+            AnimatedVisibility(
+                visible = uiState.attachment != null && uiState.attachment is Media &&
+                        (uiState.attachment?.type == Attachment.Type.Image || uiState.attachment?.type == Attachment.Type.Video),
+                enter = scaleIn(),
+                exit = scaleOut()
+            ) {
+
+                uiState.attachment?.let {
+                    PreviewAndSendAttachment(
+                        body = uiState.textInput,
+                        onBodyChanged = viewModel::updateTextInput,
+                        attachment = uiState.attachment as Media,
+                        onCloseClicked = { viewModel.updateAttachment(null) },
+                        onSendClicked = { viewModel.sendMessage() },
+                        replyingTo = uiState.replyingTo,
+                        onReplyToCleared = { viewModel.updateReplyingTo(null) }
                     )
-
                 }
 
-                TextInput(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 20.dp)
-                        .align(Alignment.BottomEnd)
-                        .clip(RoundedCornerShape(15.dp))
-                        .background(Color.White),
-                    message = uiState.textInput,
-                    attachment = uiState.attachment,
-                    onMessageChanged = viewModel::updateTextInput,
-                    onAttachmentClicked = { coroutine.launch { bottomSheetState.show() } },
-                    onRemoveAttachmentClicked = { viewModel.updateAttachment(null) },
-                    onRecordClicked = {
-                        when (recordAudioPermissionState.status) {
-                            is PermissionStatus.Denied -> {
-                                recordAudioPermissionState.launchPermissionRequest()
-                            }
-                            else -> {}
-                        }
-                    },
-                    onRecordLongPressed = {
-                        when (recordAudioPermissionState.status) {
-                            is PermissionStatus.Denied -> {
-                                recordAudioPermissionState.launchPermissionRequest()
-                            }
-                            PermissionStatus.Granted -> {
-                                mediaRecorderState.startRecording()
-                            }
-                        }
-                    },
-                    onRecordReleased = {
-
-                        if (recordAudioPermissionState.status == PermissionStatus.Granted) {
-                            coroutine.launch(Dispatchers.IO) {
-                                try {
-                                    val recording = mediaRecorderState.stopRecording()
-                                    viewModel.updateAttachment(recording)
-                                    viewModel.sendMessage()
-                                } catch (e: java.io.IOException) {
-                                    e.printStackTrace()
-                                }
-                            }
-                        }
-                    },
-                    onSendClicked = viewModel::sendMessage
-                )
-            },
-            lifecycleOwner
-        ) {
-            val observer = LifecycleEventObserver { _, event ->
-                when (event) {
-                    Lifecycle.Event.ON_PAUSE -> {
-                        mediaPlayerState.stopMedia()
-                        mediaRecorderState.stopMediaRecorder()
-                        viewModel.setAllMessagesAsRead()
-                    }
-                    Lifecycle.Event.ON_DESTROY -> {
-                        mediaPlayerState.releasePlayer()
-                        mediaRecorderState.releaseRecorder()
-                    }
-                    else -> {}
-                }
             }
-
-            lifecycleOwner.lifecycle.addObserver(observer)
-
-            onDispose {
-                lifecycleOwner.lifecycle.removeObserver(observer)
-                mediaPlayerState.releasePlayer()
+        },
+        lifecycleOwner
+    ) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_PAUSE -> {
+                    mediaPlayerState.stopMedia()
+                    mediaRecorderState.stopMediaRecorder()
+                    viewModel.setAllMessagesAsRead()
+                }
+                Lifecycle.Event.ON_DESTROY -> {
+                    mediaPlayerState.releasePlayer()
+                    mediaRecorderState.releaseRecorder()
+                }
+                else -> {}
             }
         }
 
-    }
-}
+        lifecycleOwner.lifecycle.addObserver(observer)
 
-@Composable
-fun Context.mediaPickerLauncher(
-    coroutineScope: CoroutineScope,
-    onImageSelected: (Attachment.Image) -> Unit
-) = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-
-    if (uri != null) {
-
-        coroutineScope.launch {
-            val imageName = defaultAttachmentName
-            val savedImageUri = saveImageToInternalStorage(uri, imageName)
-            val attachment = Attachment.Image(
-                null,
-                imageName,
-                savedImageUri.path,
-                0,
-                null,
-                null
-            )
-
-            onImageSelected(attachment)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            mediaPlayerState.releasePlayer()
         }
-
-        Timber.d("Selected URI: $uri")
-    } else {
-        Timber.d("No media selected")
     }
+
 }
 
 
-@Composable
-fun Context.openPdfDocumentLauncher(
-    onPdfAttachmentSelected: (Attachment.Pdf) -> Unit
-) = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-
-    val cachedImageName = defaultAttachmentName
-
-    if (uri != null) {
-        contentResolver.takePersistableUriPermission(
-            uri,
-            Intent.FLAG_GRANT_READ_URI_PERMISSION
+private fun Context.openDocumentWithChooser(
+    document: Media
+) {
+    val file = document.cacheUri?.let { File(it) }
+    val uri = file?.let {
+        FileProvider.getUriForFile(
+            this,
+            "${packageName}.provider",
+            it
         )
-
-        onPdfAttachmentSelected(
-            Attachment.Pdf(
-                null,
-                cachedImageName,
-                uri.path,
-                null
-            )
-        )
-
-        Timber.d("Selected URI: $uri")
-    } else {
-        Timber.d("No media selected")
     }
-}
+    val openFileIntent = Intent(Intent.ACTION_VIEW)
+    openFileIntent.setDataAndType(uri, document.mimeType)
+    openFileIntent.flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
 
-@Composable
-fun Context.cameraLauncher(
-    coroutineScope: CoroutineScope,
-    onImageTaken: (Attachment.Image) -> Unit
-) = rememberLauncherForActivityResult(ActivityResultContracts.TakePicturePreview()) { bitmap ->
+    val chooserIntent = Intent.createChooser(
+        openFileIntent,
+        getString(R.string.choose_pdf_title)
+    )
 
-    val cachedImageName = defaultAttachmentName
-    coroutineScope.launch {
-        bitmap?.let {
-            val uri = saveBitmapToInternalStorage(bitmap, cachedImageName)
-            onImageTaken(
-                Attachment.Image(
-                    null,
-                    cachedImageName,
-                    uri.path,
-                    0,
-                    null,
-                    null
-                )
-            )
-        }
+    try {
+        startActivity(chooserIntent)
+    } catch (e: ActivityNotFoundException) {
+        e.printStackTrace()
     }
 }
 
@@ -352,20 +382,20 @@ fun Context.cameraLauncher(
 @Composable
 fun MessagesList(
     messages: LazyPagingItems<MessageItem>,
-    trackPositions: Map<String, Int>,
+    messageListState: LazyListState,
+    uploadProgress: Map<Any, UploadProgress>,
+    downloadProgress: Map<Any, DownloadProgress>,
     modifier: Modifier = Modifier,
-    onAudioSeekValueChanged: (Attachment.Recording, Int) -> Unit,
-    onResumeAudio: (Attachment.Recording) -> Unit,
-    onPauseAudio: (Attachment.Recording) -> Unit,
-    onPdfClicked: (Attachment.Pdf) -> Unit,
-    onImageClicked: (MessageItem.MessageData) -> Unit,
-    onAttachmentDownloaded: (MessageItem.MessageData, String) -> Unit,
-    activeMessage: Attachment.Recording?,
+    onResumeAudio: (MessageItem.MessageData, seekValue: Int) -> Unit,
+    onPauseAudio: (Media) -> Unit,
+    onDocumentClicked: (MessageItem.MessageData) -> Unit,
+    onImageClicked: (messageId: String) -> Unit,
+    currentlyPlaying: Media?,
+    replyTo: (MessageItem.MessageData) -> Unit,
     lastReadMessage: (MessageItem.MessageData) -> Unit
 ) {
 
     val coroutine = rememberCoroutineScope()
-    val context = LocalContext.current
 
     val lastMessageNotSentByMe: MessageItem.MessageData? by remember(messages) {
         derivedStateOf { messages.itemSnapshotList.firstOrNull { it is MessageItem.MessageData && !it.isFromMe() } as? MessageItem.MessageData }
@@ -379,8 +409,6 @@ fun MessagesList(
         }
     }
 
-    val messageListState = rememberLazyListState()
-
     val firstMessagesVisible by remember { derivedStateOf { messageListState.firstVisibleItemIndex < 25 } }
 
     LaunchedEffect(messages.itemCount) {
@@ -388,6 +416,23 @@ fun MessagesList(
             if (messageListState.firstVisibleItemIndex < 10) {
                 messageListState.animateScrollToItem(0)
             }
+    }
+
+    var flashColor by remember { mutableStateOf(false) }
+    val infiniteTransition =
+        animateColorAsState(
+            if (flashColor) Color.White.copy(alpha = 0.5f) else Color.Transparent,
+            animationSpec = tween(1000, easing = LinearEasing)
+        )
+    var flashMessage by remember { mutableStateOf(-1) }
+
+    if (flashColor) {
+        LaunchedEffect(Unit) {
+            coroutine.launch {
+                delay(2000)
+                flashColor = false
+            }
+        }
     }
 
     Box(modifier = modifier) {
@@ -402,10 +447,10 @@ fun MessagesList(
             items(
                 messages.itemCount,
                 key = { index ->
-                    messages[index]?.itemId ?: UUID.randomUUID().toString()
+                    val message = messages[index]
+                    message?.itemId ?: index
                 }
             ) { index ->
-
                 when (val currentMessage = messages[index]) {
                     null -> PlaceHolderMessage()
                     is MessageItem.MessageData -> {
@@ -413,44 +458,7 @@ fun MessagesList(
                             if (index < messages.itemCount.minus(1)) messages[index + 1] else null
                         val previousMessage = if (index > 0) messages[index - 1] else null
 
-
-
-                        LaunchedEffect(Unit) {
-
-                            when (val attachment = currentMessage.attachment) {
-                                is Attachment.Recording -> {
-                                    if (attachment.url != null && attachment.cacheUri == null) {
-                                        coroutine.launch {
-                                            val uri =
-                                                context.saveAttachmentToInternalStorage(attachment)
-                                            uri.path?.let {
-                                                onAttachmentDownloaded(
-                                                    currentMessage,
-                                                    it
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                                is Attachment.Pdf -> {
-                                    if (attachment.url != null && attachment.cacheUri == null) {
-                                        coroutine.launch {
-                                            val uri =
-                                                context.saveAttachmentToInternalStorage(attachment)
-                                            uri.path?.let {
-                                                onAttachmentDownloaded(
-                                                    currentMessage,
-                                                    it
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                                else -> {}
-                            }
-                        }
-
-                        Box(
+                        SwipeableBox(
                             modifier = Modifier
                                 .padding(
                                     top = messageTopPadding(
@@ -458,49 +466,105 @@ fun MessagesList(
                                         currentMessage = currentMessage
                                     )
                                 )
-                                .animateItemPlacement()
+                                .background(if (flashMessage == index) infiniteTransition.value else Color.Transparent)
+                                .animateItemPlacement(),
+                            hiddenContent = {
+                                Box(
+                                    modifier = Modifier
+                                        .size(40.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(0xFF3E5A55))
+                                ) {
+                                    Icon(
+                                        painter = painterResource(id = R.drawable.ic_reply),
+                                        modifier = Modifier
+                                            .size(24.dp)
+                                            .align(Alignment.Center),
+                                        tint = Color.White,
+                                        contentDescription = null
+                                    )
+                                }
+                            },
+                            onSwipe = {
+                                replyTo(currentMessage)
+                            }
                         ) {
 
-                            val lastTrackPosition =
-                                if (currentMessage.attachment is Attachment.Recording)
-                                    trackPositions[currentMessage.attachment.cacheUri] else 0
-
+                            val downloadProgress by remember(downloadProgress) {
+                                derivedStateOf {
+                                    if (currentMessage.attachment is Media)
+                                        downloadProgress[currentMessage.id]
+                                    else null
+                                }
+                            }
 
                             if (currentMessage.isFromMe()) {
+
+                                val progress by remember(uploadProgress) {
+                                    derivedStateOf {
+                                        if (currentMessage.attachment is Media)
+                                            uploadProgress[currentMessage.id]
+                                        else null
+                                    }
+                                }
+
                                 SentMessage(
                                     message = currentMessage,
+                                    uploadProgress = progress,
+                                    downloadProgress = downloadProgress,
                                     nextMessage = nextMessage,
                                     previousMessage = previousMessage,
-                                    onAudioSeekValueChanged = {
-                                        onAudioSeekValueChanged(
-                                            currentMessage.attachment as Attachment.Recording,
-                                            it
-                                        )
+                                    onResumeAudio = {
+                                        onResumeAudio(currentMessage, it)
                                     },
-                                    onPauseAudio = { onPauseAudio(currentMessage.attachment as Attachment.Recording) },
-                                    onResumeAudio = { onResumeAudio(currentMessage.attachment as Attachment.Recording) },
-                                    onPdfClicked = { onPdfClicked(currentMessage.attachment as Attachment.Pdf) },
-                                    onImageClicked = { onImageClicked(currentMessage) },
-                                    isActiveMessage = activeMessage == currentMessage.attachment,
-                                    lastTrackPosition = lastTrackPosition ?: 0
+                                    onPauseAudio = { onPauseAudio(currentMessage.attachment as Media) },
+                                    onImageClicked = { onImageClicked(currentMessage.id) },
+                                    onPdfClicked = { onDocumentClicked(currentMessage) },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    isActiveMessage = currentlyPlaying == currentMessage.attachment,
+                                    onReplyClicked = {
+                                        coroutine.launch {
+                                            val replyMessageIndex = messages
+                                                .itemSnapshotList
+                                                .indexOfFirst {
+                                                    it is MessageItem.MessageData
+                                                            && it.id == currentMessage.replyTo?.id
+                                                }
+                                            flashMessage = replyMessageIndex
+                                            messageListState.scrollToItem(replyMessageIndex)
+                                            flashColor = true
+                                            delay(1000)
+                                            flashColor = false
+                                        }
+                                    }
                                 )
                             } else {
                                 ReceivedMessage(
                                     message = currentMessage,
+                                    downloadProgress = downloadProgress,
                                     nextMessage = nextMessage,
                                     previousMessage = previousMessage,
-                                    onAudioSeekValueChanged = {
-                                        onAudioSeekValueChanged(
-                                            currentMessage.attachment as Attachment.Recording,
-                                            it
-                                        )
-                                    },
-                                    onPauseAudio = { onPauseAudio(currentMessage.attachment as Attachment.Recording) },
-                                    onResumeAudio = { onResumeAudio(currentMessage.attachment as Attachment.Recording) },
-                                    onPdfClicked = { onPdfClicked(currentMessage.attachment as Attachment.Pdf) },
-                                    onImageClicked = { onImageClicked(currentMessage) },
-                                    isActiveMessage = activeMessage == currentMessage.attachment,
-                                    lastTrackPosition = lastTrackPosition ?: 0
+                                    onResumeAudio = { onResumeAudio(currentMessage, it) },
+                                    onPauseAudio = { onPauseAudio(currentMessage.attachment as Media) },
+                                    onImageClicked = { onImageClicked(currentMessage.id) },
+                                    onPdfClicked = { onDocumentClicked(currentMessage) },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    isActiveMessage = currentlyPlaying == currentMessage.attachment,
+                                    onReplyClicked = {
+                                        coroutine.launch {
+                                            val replyMessageIndex = messages
+                                                .itemSnapshotList
+                                                .indexOfFirst {
+                                                    it is MessageItem.MessageData
+                                                            && it.id == currentMessage.replyTo?.id
+                                                }
+                                            flashMessage = replyMessageIndex
+                                            messageListState.scrollToItem(replyMessageIndex)
+                                            flashColor = true
+                                            delay(1000)
+                                            flashColor = false
+                                        }
+                                    }
                                 )
                             }
 
@@ -579,7 +643,8 @@ fun MessagesList(
             ) {
                 Icon(
                     painter = painterResource(id = R.drawable.ic_down),
-                    contentDescription = null
+                    contentDescription = null,
+                    tint = Color.Black
                 )
             }
         }
@@ -598,13 +663,10 @@ fun ChatTopBar(
     name: String?,
     status: String?,
     image: ContactImage? = null,
-    chatMenuExpanded: Boolean,
-    onChatMenuDismissed: () -> Unit,
-    inviteUsersOptionEnabled: Boolean,
-    onInviteUsersClicked: () -> Unit,
     onBackClicked: () -> Unit,
     onPersonClicked: () -> Unit,
-    onMenuClicked: () -> Unit
+    onMenuClicked: () -> Unit,
+    dropDownMenu: @Composable () -> Unit
 ) {
     TopAppBar(
         modifier = Modifier
@@ -659,29 +721,7 @@ fun ChatTopBar(
                         )
                     }
 
-                    DropdownMenu(
-                        modifier = Modifier
-                            .width(200.dp)
-                            .background(
-                                color = MaterialTheme.colors.background,
-                                shape = RoundedCornerShape(15.dp)
-                            )
-                            .border(
-                                width = 1.dp,
-                                color = Color.White,
-                                shape = RoundedCornerShape(15.dp)
-                            ),
-                        expanded = chatMenuExpanded,
-                        onDismissRequest = onChatMenuDismissed
-                    ) {
-
-                        if (inviteUsersOptionEnabled) {
-                            DropdownMenuItem(onClick = onInviteUsersClicked) {
-                                Text("Invite Users")
-                            }
-                        }
-
-                    }
+                    dropDownMenu()
                 }
             }
             Spacer(
@@ -698,9 +738,11 @@ fun ChatTopBar(
 
 @Composable
 fun MessageTime(timestamp: LocalDateTime, modifier: Modifier = Modifier) {
+    val time by remember(timestamp) { mutableStateOf(timestamp.asString(TWO_DIGIT_FORMAT)) }
     Text(
-        text = timestamp.asString(TWO_DIGIT_FORMAT),
+        text = time,
         color = MaterialTheme.colors.primary,
+        fontSize = 12.sp,
         modifier = modifier
     )
 }
@@ -710,16 +752,30 @@ fun imageBottomCornerRadius(isMessageBodyEmpty: Boolean) = if (isMessageBodyEmpt
 
 @Composable
 fun AudioPlayBackButton(
-    modifier: Modifier = Modifier,
     @DrawableRes imageRes: Int,
-    onButtonClicked: () -> Unit
+    modifier: Modifier = Modifier,
+    onButtonClicked: () -> Unit,
 ) {
     IconButton(onClick = onButtonClicked, modifier = modifier) {
         Icon(
             imageVector = ImageVector
                 .vectorResource(id = imageRes),
             contentDescription = null,
-            tint = Color.White
+            tint = Color.White,
+            modifier = Modifier.size(18.dp)
         )
+    }
+}
+
+@Composable
+fun <T : Any> LazyPagingItems<T>.rememberLazyListState(): LazyListState {
+    // After recreation, LazyPagingItems first return 0 items, then the cached items.
+    // This behavior/issue is resetting the LazyListState scroll position.
+    // Below is a workaround. More info: https://issuetracker.google.com/issues/177245496.
+    return when (itemCount) {
+        // Return a different LazyListState instance.
+        0 -> remember(this) { LazyListState(0, 0) }
+        // Return rememberLazyListState (normal case).
+        else -> androidx.compose.foundation.lazy.rememberLazyListState()
     }
 }

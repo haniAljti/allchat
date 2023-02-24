@@ -3,52 +3,90 @@ package com.hanialjti.allchat.data.remote.xmpp
 import android.content.Context
 import androidx.work.ListenableWorker
 import com.hanialjti.allchat.common.exception.NotAuthenticatedException
+import com.hanialjti.allchat.common.utils.Logger
 import com.hanialjti.allchat.data.local.datastore.UserCredentials
-import com.hanialjti.allchat.data.local.datastore.UserPreferencesManager
+import com.hanialjti.allchat.data.local.datastore.PreferencesLocalDataStore
 import com.hanialjti.allchat.data.remote.ConnectionManager
 import com.hanialjti.allchat.data.remote.delayRetry
 import com.hanialjti.allchat.data.remote.model.Presence
-import com.hanialjti.allchat.data.remote.xmpp.model.XmppConnectionConfig
+import com.hanialjti.allchat.data.remote.xmpp.model.*
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.jivesoftware.smack.ConnectionListener
 import org.jivesoftware.smack.ReconnectionManager
+import org.jivesoftware.smack.SmackException
 import org.jivesoftware.smack.XMPPConnection
-import org.jivesoftware.smack.roster.rosterstore.DirectoryRosterStore
+import org.jivesoftware.smack.XMPPException.XMPPErrorException
+import org.jivesoftware.smack.provider.ProviderManager
 import org.jivesoftware.smack.tcp.XMPPTCPConnection
 import org.jivesoftware.smackx.bookmarks.BookmarkManager
 import org.jivesoftware.smackx.caps.EntityCapsManager
 import org.jivesoftware.smackx.caps.cache.SimpleDirectoryPersistentCache
 import org.jivesoftware.smackx.carbons.CarbonManager
+import org.jivesoftware.smackx.chat_markers.element.ChatMarkersElements
+import org.jivesoftware.smackx.csi.ClientStateIndicationManager
+import org.jivesoftware.smackx.disco.ServiceDiscoveryManager
 import org.jivesoftware.smackx.muc.MultiUserChatManager
-import org.jivesoftware.smackx.ping.PingManager
+import org.jivesoftware.smackx.nick.packet.Nick
 import org.jxmpp.jid.parts.Resourcepart
 import timber.log.Timber
 
 class XmppConnectionManager(
+    appContext: Context,
     private val connection: XMPPTCPConnection,
-    private val appContext: Context,
-    private val userPreferencesManager: UserPreferencesManager,
+    private val preferencesLocalDataStore: PreferencesLocalDataStore,
+    private val externalScope: CoroutineScope,
     private val dispatcher: CoroutineDispatcher,
     private val config: XmppConnectionConfig
-) : ConnectionManager {
+) : ConnectionManager, ConnectionListener {
 
     private val workers: MutableSet<ListenableWorker> = mutableSetOf()
     private var connectRequested: Boolean = false
 
     private val reconnectionManager = ReconnectionManager.getInstanceFor(connection)
-    private val pingManager = PingManager.getInstanceFor(connection)
     private val carbonManager = CarbonManager.getInstanceFor(connection)
     private val bookmarkManager = BookmarkManager.getBookmarkManager(connection)
     private val mucManager = MultiUserChatManager.getInstanceFor(connection)
-    private val entityCapsManager = EntityCapsManager.getInstanceFor(connection)
+
+    //    private val entityCapsManager = EntityCapsManager.getInstanceFor(connection)
     private val entityCapsPersistentCache = SimpleDirectoryPersistentCache(appContext.cacheDir)
+    private val serviceDiscoveryManager = ServiceDiscoveryManager.getInstanceFor(connection)
+    private val serverPingWithAlarmManager = ServerPingWithAlarmManager.getInstanceFor(connection)
 
-    override fun getUsername() = connection.user?.asBareJid()?.toString()
+    init {
+        ProviderManager.addExtensionProvider(
+            OutOfBandData.ELEMENT,
+            OutOfBandData.NAMESPACE,
+            OOBExtensionProvider()
+        )
+        ProviderManager.addExtensionProvider(
+            AvatarDataExtensionElement.ELEMENT_NAME,
+            AvatarDataExtensionElement.NAMESPACE,
+            AvatarExtensionProvider()
+        )
+        ProviderManager.addExtensionProvider(
+            AvatarMetaDataExtensionElement.ELEMENT_NAME,
+            AvatarMetaDataExtensionElement.NAMESPACE,
+            AvatarMetaDataExtensionProvider()
+        )
+        if (config.chatMarkersEnabled) {
+            serviceDiscoveryManager.addFeature(ChatMarkersElements.NAMESPACE)
+        }
+        serviceDiscoveryManager.addFeature(Nick.NAMESPACE)
+        serviceDiscoveryManager.addFeature(AvatarMetaDataExtensionElement.NAMESPACE)
+        serviceDiscoveryManager.addFeature(Nick.NAMESPACE.plus("+notify"))
+        serviceDiscoveryManager.addFeature(AvatarMetaDataExtensionElement.NAMESPACE.plus("+notify"))
+        EntityCapsManager.setPersistentCache(entityCapsPersistentCache)
+        serverPingWithAlarmManager.isEnabled = true
+    }
 
+    override val userId get() = connection.user?.asBareJid()?.toString()
+
+    override val clientId get() = connection.user?.resourceOrNull?.toString()
 
     override fun getConfig() = config
 
@@ -60,10 +98,20 @@ class XmppConnectionManager(
         }
 
     private suspend fun joinAllChatRooms() {
-        bookmarkManager.bookmarkedConferences.forEach {
-            if (it.isAutoJoin) {
-                joinRoom(it.jid.asBareJid().toString(), connection.user.asBareJid().toString())
+        try {
+            bookmarkManager.bookmarkedConferences.forEach {
+                if (it.isAutoJoin) {
+                    joinRoom(it.jid.asBareJid().toString(), connection.user.asBareJid().toString())
+                }
             }
+        } catch (e: XMPPErrorException) {
+            Timber.e(e)
+        } catch (e: SmackException.NoResponseException) {
+            Timber.e(e)
+        } catch (e: SmackException.NotConnectedException) {
+            Timber.e(e)
+        } catch (e: InterruptedException) {
+            Timber.e(e)
         }
     }
 
@@ -74,7 +122,13 @@ class XmppConnectionManager(
                 val history = muc.getEnterConfigurationBuilder(Resourcepart.from(myId))
                     .requestHistorySince(534776876).build()
                 muc.join(history)
-            } catch (e: Exception) {
+            } catch (e: XMPPErrorException) {
+                Timber.e(e)
+            } catch (e: SmackException.NoResponseException) {
+                Timber.e(e)
+            } catch (e: SmackException.NotConnectedException) {
+                Timber.e(e)
+            } catch (e: InterruptedException) {
                 Timber.e(e)
             }
         }
@@ -82,7 +136,7 @@ class XmppConnectionManager(
 
     override suspend fun registerWorker(worker: ListenableWorker): Unit = withContext(dispatcher) {
         workers.add(worker)
-        userPreferencesManager.userCredentials.first().let {
+        preferencesLocalDataStore.userCredentials.first().let {
             if (it != null) {
                 login(it)
             } else {
@@ -92,38 +146,58 @@ class XmppConnectionManager(
     }
 
     override suspend fun updateMyPresence(presence: Presence): Unit = withContext(dispatcher) {
-        connection.stanzaFactory.buildPresenceStanza()
-            .ofType(
-                if (presence.type == Presence.Type.Available) org.jivesoftware.smack.packet.Presence.Type.available
-                else org.jivesoftware.smack.packet.Presence.Type.unavailable
-            )
+        val presenceStanza = connection.stanzaFactory.buildPresenceStanza()
+//            .ofType(
+//                if (presence.type == Presence.Type.Available) org.jivesoftware.smack.packet.Presence.Type.available
+//                else org.jivesoftware.smack.packet.Presence.Type.unavailable
+//            )
             .setStatus(presence.status)
+            .setMode(
+                if (presence.type == Presence.Type.Available) org.jivesoftware.smack.packet.Presence.Mode.available
+                else org.jivesoftware.smack.packet.Presence.Mode.away
+            )
             .build()
-            .also {
-                try {
-                    connection.sendStanza(it)
-                } catch (e: Exception) {
-                    Timber.e(e)
-                }
-            }
+
+        try {
+            connection.sendStanza(presenceStanza)
+        } catch (e: SmackException.NotConnectedException) {
+            Timber.e(e)
+        } catch (e: InterruptedException) {
+            Timber.e(e)
+        }
+
     }
 
     override suspend fun onResume() {
-        Timber.d("signing in...")
+        Logger.d { "signing in..." }
         connectRequested = true
-        userPreferencesManager.userCredentials.first()?.let { connect(it) }
-        joinAllChatRooms()
+        preferencesLocalDataStore.userCredentials.first()?.let { connect(it) }
+        connection.addConnectionListener(this)
         updateMyPresence(Presence(Presence.Type.Available, null))
-        pingManager.pingInterval = 60 * 5
-//        ClientStateIndicationManager.active(connection)
+        if (config.useForegroundService && ClientStateIndicationManager.isSupported(connection)) {
+            try {
+                ClientStateIndicationManager.active(connection)
+            } catch (e: Exception) {
+                Logger.e(e)
+            }
+        }
     }
 
     override suspend fun onPause() {
+        Logger.d { "logging out..." }
         connectRequested = false
-        updateMyPresence(Presence(Presence.Type.Unavailable, null))
-        pingManager.pingInterval = -1
+        if (config.useForegroundService && ClientStateIndicationManager.isSupported(connection)) {
+            try {
+                ClientStateIndicationManager.inactive(connection)
+            } catch (e: Exception) {
+                Logger.e(e)
+            }
+        }
+//        entityCapsManager.disableEntityCaps()
         reconnectionManager.disableAutomaticReconnection()
-//        ClientStateIndicationManager.inactive(connection)
+        connection.removeConnectionListener(this)
+        updateMyPresence(Presence(Presence.Type.Unavailable, null))
+
     }
 
     override suspend fun unregisterWorker(worker: ListenableWorker): Unit =
@@ -167,14 +241,11 @@ class XmppConnectionManager(
                         userCredentials.password
                     )
                 carbonManager.enableCarbons()
-                EntityCapsManager.setPersistentCache(entityCapsPersistentCache)
-                entityCapsManager.enableEntityCaps()
-                Timber.d("Are entity capabilities enabled: ${entityCapsManager.entityCapsEnabled()}")
             } else throw NotAuthenticatedException("Credentials are null", null)
         }
     }
 
-    private suspend fun disconnectIfNecessary() = withContext(dispatcher) {
+    private suspend fun disconnectIfPossible() = withContext(dispatcher) {
         if (connection.isConnected && workers.isEmpty() && !connectRequested) {
             try {
                 connection.disconnect()
@@ -196,7 +267,11 @@ class XmppConnectionManager(
     }
 
     override suspend fun disconnect() {
-        disconnectIfNecessary()
+        disconnectIfPossible()
+    }
+
+    override fun authenticated(connection: XMPPConnection?, resumed: Boolean) {
+        externalScope.launch { joinAllChatRooms() }
     }
 
 }

@@ -1,5 +1,6 @@
 package com.hanialjti.allchat.common.utils
 
+import android.util.TimeUtils
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.stringResource
 import com.hanialjti.allchat.R
@@ -35,6 +36,13 @@ fun Long.formatTimestamp(pattern: String = DEFAULT_PATTERN): String {
 fun LocalDateTime.asString(pattern: String = DEFAULT_PATTERN): String {
     return format(DateTimeFormatter.ofPattern(pattern))
 }
+
+fun LocalDateTime.dateAsString(pattern: String = "yyyy-MM-dd"): String = format(pattern)
+fun LocalDate.dateAsString(pattern: String = "yyyy-MM-dd"): String = format(pattern)
+
+fun LocalDateTime.timeAsString(pattern: String = TWO_DIGIT_FORMAT): String = format(pattern)
+private fun LocalDateTime.format(pattern: String) = format(DateTimeFormatter.ofPattern(pattern))
+private fun LocalDate.format(pattern: String) = format(DateTimeFormatter.ofPattern(pattern))
 
 sealed class UiDate(
     private val dateTime: LocalDateTime = LocalDateTime.now()

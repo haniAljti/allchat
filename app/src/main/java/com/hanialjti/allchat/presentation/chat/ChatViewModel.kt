@@ -1,33 +1,39 @@
 package com.hanialjti.allchat.presentation.chat
 
-import androidx.compose.runtime.State
-import androidx.compose.runtime.mutableStateOf
+import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.paging.cachedIn
+import com.hanialjti.allchat.data.model.Attachment
 import com.hanialjti.allchat.data.model.ChatState
 import com.hanialjti.allchat.data.model.MessageItem
-import com.hanialjti.allchat.data.repository.IChatRepository
+import com.hanialjti.allchat.data.remote.model.DownloadProgress
+import com.hanialjti.allchat.data.remote.model.UploadProgress
+import com.hanialjti.allchat.data.repository.ConversationRepository
+import com.hanialjti.allchat.data.repository.FileRepository
+import com.hanialjti.allchat.data.repository.IMessageRepository
+import com.hanialjti.allchat.data.repository.UserRepository
 import com.hanialjti.allchat.domain.usecase.*
 import com.hanialjti.allchat.presentation.conversation.ContactImage
 import com.hanialjti.allchat.presentation.conversation.UiText
-import com.hanialjti.allchat.presentation.preview_attachment.PreviewAttachmentViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
-import kotlinx.datetime.toJavaLocalDateTime
 import timber.log.Timber
+import java.io.File
 
 class ChatViewModel(
-    private val chatRepository: IChatRepository,
+    private val chatRepository: IMessageRepository,
+    private val fileRepository: FileRepository,
+    private val userRepository: UserRepository,
+    private val conversationRepository: ConversationRepository,
     private val resetUnreadCounterUseCase: ResetUnreadCounterUseCase,
-    getMessagesUseCase: GetMessagesUseCase,
     private val addUserToContactsUseCase: AddUserToContactsUseCase,
-    private val sendMessageUseCase: SendMessageUseCase,
     private val getContactInfoUseCase: GetContactInfoUseCase,
     private val sendReadMarkerForMessageUseCase: SendReadMarkerForMessageUseCase,
     private val conversationId: String,
     private val isGroupChat: Boolean
-) : ViewModel(), PreviewAttachmentViewModel {
+) : ViewModel() {
 
     private val _chatUiState = MutableStateFlow(ChatScreenUiState())
     val uiState: StateFlow<ChatScreenUiState> get() = _chatUiState
@@ -36,10 +42,7 @@ class ChatViewModel(
     private var lastReadMessage: MessageItem.MessageData? = null
 
     fun updateLastReadMessage(lastReadMessage: MessageItem.MessageData) {
-        if (this.lastReadMessage == null || this.lastReadMessage != lastReadMessage && this.lastReadMessage?.timestamp?.toJavaLocalDateTime()?.isBefore(
-                lastReadMessage.timestamp.toJavaLocalDateTime()
-            ) == true
-        ) {
+        if (this.lastReadMessage == null || this.lastReadMessage != lastReadMessage && this.lastReadMessage?.isOlderThan(lastReadMessage) == true) {
             Timber.d("lastReadMessage updated. New value = $lastReadMessage")
             this.lastReadMessage = lastReadMessage
             viewModelScope.launch {
@@ -49,10 +52,41 @@ class ChatViewModel(
     }
 
     init {
-//        updateMyChatState(ChatState.Active(conversationId))
-//        viewModelScope.launch {
-//            connectionManager.getUsername()?.let { chatRepository.resendAllPendingMessages(it) }
-//        }
+        updateMyChatState(ChatState.Active(conversationId))
+        viewModelScope.launch {
+            chatRepository.resendAllPendingMessages()
+        }
+
+        viewModelScope.launch {
+            fileRepository.getUploadProgressForAll()
+                .collect { uploadProgresses ->
+                    _chatUiState.update {
+                        it.copy(
+                            uploadProgresses = uploadProgresses
+                        )
+                    }
+                }
+        }
+
+        viewModelScope.launch {
+            userRepository.isBlocked(conversationId)
+                .collectLatest { isBlocked ->
+                    _chatUiState.update {
+                        it.copy(isBlocked = isBlocked)
+                    }
+                }
+        }
+
+        viewModelScope.launch {
+            fileRepository.getDownloadProgressForAll()
+                .collect { downloadProgresses ->
+                    _chatUiState.update {
+                        it.copy(
+                            downloadProgresses = downloadProgresses
+                        )
+                    }
+                }
+        }
 
         viewModelScope.launch {
             getContactInfoUseCase(conversationId)
@@ -80,28 +114,24 @@ class ChatViewModel(
         }
     }
 
-    val messages = getMessagesUseCase(conversationId)
+    val messages = chatRepository
+        .fetchMessagesFor(conversationId)
         .onEach {
             resetUnreadCounterUseCase(conversationId)
         }
         .cachedIn(viewModelScope)
 
 
-    fun saveMessageContentUri(message: MessageItem.MessageData, cacheContentUri: String) {
+    @RequiresApi(Build.VERSION_CODES.Q)
+    fun downloadAttachment(messageData: MessageItem.MessageData) {
         viewModelScope.launch {
-//            chatRepository.saveMessageContentUri(message.id, cacheContentUri)
+            chatRepository.downloadAttachment(messageData)
         }
     }
 
-//    fun getAttachment(messageId: String) = {
-//        getAttachmentUseCase(messageId).map {
-//            it.attachment?.asAttachment()
-//        }
-//    }
-
     private fun updateMyChatState(chatState: ChatState) {
         viewModelScope.launch {
-            chatRepository.updateMyChatState(chatState)
+            conversationRepository.updateMyChatState(chatState)
         }
     }
 
@@ -109,10 +139,12 @@ class ChatViewModel(
         addUserToContactsUseCase(conversationId)
     }
 
+    @RequiresApi(Build.VERSION_CODES.Q)
     fun sendMessage() = viewModelScope.launch {
 
         val textInput = _chatUiState.value.textInput
         val attachment = _chatUiState.value.attachment
+        val replyingTo = _chatUiState.value.replyingTo
 
         if (shouldCreateConversation) {
             addUserToContacts()
@@ -121,16 +153,18 @@ class ChatViewModel(
         _chatUiState.update {
             it.copy(
                 textInput = "",
-                attachment = null
+                attachment = null,
+                replyingTo = null
             )
         }
 
-        if (textInput != "" || attachment != null) {
-            sendMessageUseCase(
+        if (textInput.isNotBlank() || attachment != null) {
+            chatRepository.sendMessage(
                 body = textInput,
-                attachment = attachment,
+                replyingTo = replyingTo?.id,
                 contactId = conversationId,
-                isGroupChat = isGroupChat
+                isGroupChat = isGroupChat,
+                attachment = attachment
             )
         }
     }
@@ -152,9 +186,27 @@ class ChatViewModel(
 
     }
 
+    fun blockUser() {
+        viewModelScope.launch {
+            userRepository.blockUser(conversationId)
+        }
+    }
+
+    fun unblockUser() {
+        viewModelScope.launch {
+            userRepository.unblockUser(conversationId)
+        }
+    }
+
 //    fun setThisChatAsInactive() {
 //        updateMyChatState(ChatState.Inactive(conversationId))
 //    }
+
+    fun createNewTempFile(fileExtension: String): File? =
+        fileRepository.createNewTempFile(fileExtension = fileExtension)
+
+    fun deleteCameraTempFile() =
+        _chatUiState.value.lastCreatedTempFile?.let { fileRepository.deleteTempFile(it) }
 
     fun updateAttachment(attachment: Attachment?) {
         viewModelScope.launch {
@@ -166,31 +218,22 @@ class ChatViewModel(
         }
     }
 
-//    fun getRoomInfo() {
-//        viewModelScope.launch {
-//            conversationRepository.getRoomInfo(conversationId)
-//        }
-//    }
-
-    fun updateTrackPosition(key: String, position: Int) {
+    fun updateReplyingTo(replyingTo: MessageItem.MessageData?) {
         viewModelScope.launch {
             _chatUiState.update {
                 it.copy(
-                    trackPositions = it.trackPositions.apply {
-                        put(key, position)
-                    }
+                    replyingTo = replyingTo
                 )
             }
         }
     }
 
-    override fun getAttachment(): State<Attachment?> {
-        return mutableStateOf(_chatUiState.value.attachment)
+    fun updateTempFile(tempFile: File?) {
+        viewModelScope.launch {
+            _chatUiState.update { it.copy(lastCreatedTempFile = tempFile) }
+        }
     }
 
-    override fun deleteAttachment() {
-        updateAttachment(null)
-    }
 }
 
 const val defaultName = "AllChat User"
@@ -198,8 +241,12 @@ const val defaultName = "AllChat User"
 data class ChatScreenUiState(
     val textInput: String = "",
     val attachment: Attachment? = null,
+    val isBlocked: Boolean = false,
     val name: String = defaultName,
     val image: ContactImage? = null,
     val status: UiText? = null,
-    val trackPositions: MutableMap<String, Int> = mutableMapOf()
+    val replyingTo: MessageItem.MessageData? = null,
+    val uploadProgresses: Map<Any, UploadProgress> = mapOf(),
+    val downloadProgresses: Map<Any, DownloadProgress> = mapOf(),
+    val lastCreatedTempFile: File? = null
 )

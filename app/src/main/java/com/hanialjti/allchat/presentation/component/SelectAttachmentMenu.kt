@@ -11,10 +11,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.ExperimentalMaterialApi
-import androidx.compose.material.Icon
-import androidx.compose.material.ModalBottomSheetState
-import androidx.compose.material.Text
+import androidx.compose.material.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -22,6 +19,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.hanialjti.allchat.R
 import com.hanialjti.allchat.common.model.MenuOption
@@ -35,21 +33,23 @@ fun OpenFilePickerSheetLayout(
     bottomSheetState: ModalBottomSheetState,
     pickMedia: ManagedActivityResultLauncher<PickVisualMediaRequest, Uri?>,
     takePhoto: ManagedActivityResultLauncher<Void?, Bitmap?>,
-    choosePdfDocument: ManagedActivityResultLauncher<Array<String>, Uri?>
+    choosePdfDocument: ManagedActivityResultLauncher<String, Uri?>
 ) {
     Spacer(modifier = Modifier.height(1.dp))
 
-    AttachmentMenu { selectedOption ->
+    AttachmentMenu(
+        modifier = Modifier.fillMaxWidth().background(MaterialTheme.colors.background)
+    ) { selectedOption ->
         coroutine.launch { bottomSheetState.hide() }
         when (selectedOption) {
             is AttachmentMenuOption.OpenGallery -> {
                 pickMedia.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
             }
-            is AttachmentMenuOption.OpenCamera -> {
+            is AttachmentMenuOption.Camera -> {
                 takePhoto.launch()
             }
-            is AttachmentMenuOption.SelectPdfFile -> {
-                choosePdfDocument.launch(arrayOf("application/pdf"))
+            is AttachmentMenuOption.Document -> {
+                choosePdfDocument.launch("application/*")
             }
             else -> {
             }
@@ -62,11 +62,16 @@ fun AttachmentMenu(
     modifier: Modifier = Modifier,
     onOptionSelected: (MenuOption) -> Unit,
 ) {
-    Column(modifier = modifier) {
+    Column(
+        modifier = modifier.padding(bottom = 20.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
         BottomSheetKnob()
-        attachmentMenuOptions.forEach { attachmentMenuOption ->
-            MenuOption(attachmentMenuOption) { menuOption ->
-                onOptionSelected(menuOption)
+        Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+            attachmentMenuOptions.forEach { attachmentMenuOption ->
+                MenuOption(attachmentMenuOption) { menuOption ->
+                    onOptionSelected(menuOption)
+                }
             }
         }
     }
@@ -77,16 +82,18 @@ sealed class AttachmentMenuOption(
     override val icon: Int
 ) :
     MenuOption(name, icon) {
-    object OpenGallery : MenuOption(R.string.open_gallery, R.drawable.ic_gallery)
-    object OpenCamera : MenuOption(R.string.open_camera, R.drawable.ic_camera)
-    object SelectPdfFile : MenuOption(R.string.choose_pdf, R.drawable.ic_filepdf)
+    object OpenGallery : MenuOption(R.string.gallery, R.drawable.ic_gallery)
+    object Camera : MenuOption(R.string.camera, R.drawable.ic_camera)
+    object Document : MenuOption(R.string.document, R.drawable.ic_document)
+    object Location : MenuOption(R.string.location, R.drawable.ic_location)
 
 }
 
 val attachmentMenuOptions = listOf(
-    AttachmentMenuOption.OpenCamera,
+    AttachmentMenuOption.Camera,
     AttachmentMenuOption.OpenGallery,
-    AttachmentMenuOption.SelectPdfFile
+    AttachmentMenuOption.Document,
+    AttachmentMenuOption.Location
 )
 
 @Composable
@@ -95,19 +102,25 @@ fun MenuOption(
     modifier: Modifier = Modifier,
     onOptionSelected: (MenuOption) -> Unit
 ) {
-    Row(
+    Column(
         modifier = modifier
-            .fillMaxWidth()
-            .clickable { onOptionSelected(menuOption) }
-            .padding(PaddingValues(vertical = 15.dp, horizontal = 25.dp)),
-        verticalAlignment = Alignment.CenterVertically,
+            .width(75.dp)
+            .clickable { onOptionSelected(menuOption) },
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Icon(
-            painter = painterResource(id = menuOption.icon),
-            contentDescription = null,
-            modifier = Modifier.padding(PaddingValues(vertical = 15.dp, horizontal = 25.dp))
-        )
-        Text(text = stringResource(id = menuOption.name))
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(20.dp))
+                .background(Color(0xFF191D18))
+                .padding(14.dp)
+        ) {
+            Icon(
+                painter = painterResource(id = menuOption.icon),
+                contentDescription = null,
+            )
+        }
+        Spacer(modifier = Modifier.height(5.dp))
+        Text(text = stringResource(id = menuOption.name), textAlign = TextAlign.Center)
     }
 }
 

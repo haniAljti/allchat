@@ -35,7 +35,7 @@ class InviteUsersViewModel(
 
     fun inviteSelectedUsers() {
         viewModelScope.launch {
-            val invitedUsers = _uiState.value.selectedUsers.mapNotNull { it.id }
+            val invitedUsers = _uiState.value.selectedUsers.map { it.id }
             inviteUsersUseCase(chatRoomId, *invitedUsers.toTypedArray())
         }
     }

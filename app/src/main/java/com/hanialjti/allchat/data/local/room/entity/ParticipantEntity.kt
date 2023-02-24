@@ -3,8 +3,7 @@ package com.hanialjti.allchat.data.local.room.entity
 import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
-import androidx.room.ForeignKey.CASCADE
-import com.hanialjti.allchat.data.model.Contact
+import androidx.room.ForeignKey.Companion.CASCADE
 import com.hanialjti.allchat.data.model.Participant
 import com.hanialjti.allchat.data.model.Role
 

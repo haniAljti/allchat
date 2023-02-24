@@ -1,9 +1,9 @@
 package com.hanialjti.allchat.data.model
 
-import com.hanialjti.allchat.presentation.chat.Attachment
 import com.hanialjti.allchat.presentation.conversation.ContactContent
 import com.hanialjti.allchat.presentation.conversation.ContactImage
 import kotlinx.datetime.LocalDateTime
+import kotlinx.serialization.Serializable
 
 data class Contact(
     val id: String? = null,
@@ -18,7 +18,7 @@ data class Contact(
     val unreadMessages: Int = 0,
 )
 
-@kotlinx.serialization.Serializable
+@Serializable
 data class MessageSummary(
     val body: String?,
     val status: MessageStatus,

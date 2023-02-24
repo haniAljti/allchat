@@ -15,9 +15,9 @@ class EditUserInfoViewModel(
     private val _uiState = MutableStateFlow(EditUserInfoUiState())
     val uiState: StateFlow<EditUserInfoUiState> get() = _uiState
 
-    init {
-        viewModelScope.launch { userRepository.listenForUsername() }
-    }
+//    init {
+//        viewModelScope.launch { userRepository.listenForUsername() }
+//    }
 
     fun setUserName(name: String) {
         viewModelScope.launch {
@@ -27,15 +27,46 @@ class EditUserInfoViewModel(
         }
     }
 
+    fun setAvatar(avatar: ByteArray?) {
+        viewModelScope.launch {
+            _uiState.update {
+                it.copy(avatar = avatar)
+            }
+        }
+    }
+
     fun updateUserInfo() {
         viewModelScope.launch {
             val username = _uiState.value.name
-            userRepository.updateUserInfo(username)
+            val avatar = _uiState.value.avatar
+            if (username.isNotBlank()) userRepository.updateUserNickname(username)
+            userRepository.updateAvatar(avatar)
         }
     }
 }
 
 data class EditUserInfoUiState(
     val name: String = "",
-    val Image: String? = null,
-)
+    val avatar: ByteArray? = null,
+) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+
+        other as EditUserInfoUiState
+
+        if (name != other.name) return false
+        if (avatar != null) {
+            if (other.avatar == null) return false
+            if (!avatar.contentEquals(other.avatar)) return false
+        } else if (other.avatar != null) return false
+
+        return true
+    }
+
+    override fun hashCode(): Int {
+        var result = name.hashCode()
+        result = 31 * result + (avatar?.contentHashCode() ?: 0)
+        return result
+    }
+}

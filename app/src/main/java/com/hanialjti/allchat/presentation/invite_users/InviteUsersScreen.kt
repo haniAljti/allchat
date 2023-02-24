@@ -1,18 +1,18 @@
 package com.hanialjti.allchat.presentation.invite_users
 
-import androidx.compose.animation.ExperimentalAnimationApi
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.Button
-import androidx.compose.material.Checkbox
-import androidx.compose.material.MaterialTheme
-import androidx.compose.material.Text
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -20,9 +20,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
@@ -135,6 +137,7 @@ fun SelectableUser(
 ) {
     Row(
         modifier = modifier
+            .clickable { onSelectedChanged(!selected) }
             .padding(horizontal = 36.dp, vertical = 12.dp)
             .fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
@@ -179,7 +182,11 @@ fun SelectableUser(
         }
 
         Box {
-            Checkbox(checked = selected, onCheckedChange = onSelectedChanged)
+            AnimatedCheckBox(
+                isChecked = selected,
+                onClicked = onSelectedChanged,
+                modifier = modifier.size(25.dp)
+            )
         }
 
 //        Column(
@@ -215,6 +222,45 @@ fun SelectableUser(
 //                }
 //            }
 //        }
+    }
+}
+
+@OptIn(ExperimentalAnimationApi::class)
+@Composable
+fun AnimatedCheckBox(
+    isChecked: Boolean,
+    onClicked: (Boolean) -> Unit,
+    modifier: Modifier = Modifier
+) {
+
+    val transition =
+        updateTransition(targetState = isChecked, label = "")
+
+    val recordButtonColor by transition.animateColor(label = "") { recording ->
+        if (recording) Green else Color.Transparent
+    }
+
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(35))
+            .border(1.dp, Color.White, RoundedCornerShape(35))
+            .background(color = recordButtonColor)
+            .clickable {
+                onClicked(!isChecked)
+            }
+    ) {
+        AnimatedVisibility(
+            visible = isChecked,
+            enter = scaleIn(
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                    stiffness = Spring.StiffnessMedium
+                )
+            ),
+            exit = scaleOut()
+        ) {
+            Icon(imageVector = Icons.Default.Check, contentDescription = null)
+        }
     }
 }
 

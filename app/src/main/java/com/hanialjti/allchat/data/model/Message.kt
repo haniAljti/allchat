@@ -1,32 +1,53 @@
 package com.hanialjti.allchat.data.model
 
+import com.hanialjti.allchat.R
 import com.hanialjti.allchat.common.utils.UiDate
-import com.hanialjti.allchat.presentation.chat.Attachment
 import com.hanialjti.allchat.presentation.conversation.ContactImage
 import com.hanialjti.allchat.presentation.conversation.UiText
 import kotlinx.datetime.*
-import java.util.UUID
 
-sealed class MessageItem(val itemId: String = UUID.randomUUID().toString()) {
-    data class MessageDateSeparator(val date: UiDate): MessageItem()
-    data class NewMessagesSeparator(val date: UiText): MessageItem()
+sealed class MessageItem(open val itemId: String?) {
+    data class MessageDateSeparator(val date: UiDate, override val itemId: String) :
+        MessageItem(itemId)
+
+    data class NewMessagesSeparator(
+        val date: UiText = UiText.StringResource(R.string.separator_new_messages),
+        override val itemId: String
+    ) : MessageItem(itemId)
+
     data class MessageData(
-        val id: String? = null,
+        val id: String,
         val body: String? = null,
-        val timestamp: LocalDateTime = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()),
+        val date: String,
+        val time: String,
+        val timestamp: LocalDateTime = Clock.System.now()
+            .toLocalDateTime(TimeZone.currentSystemDefault()),
         val contactId: String? = null,
         val senderId: String?,
         val senderImage: ContactImage?,
         val senderName: String?,
         val ownerId: String? = null,
+        val sentTo: String? = null,
+        val replyTo: ReplyingToMessage? = null,
         val status: MessageStatus = MessageStatus.Pending,
         val type: MessageType? = null,
         val read: Boolean = false,
         val attachment: Attachment?,
-    ): MessageItem() {
+    ) : MessageItem(id) {
         fun isFromMe() = (senderId ?: ownerId) == ownerId
+
+        fun isOlderThan(message: MessageData): Boolean {
+            return this.timestamp.toJavaLocalDateTime().isBefore(message.timestamp.toJavaLocalDateTime())
+        }
     }
 }
+
+data class ReplyingToMessage(
+    val id: String,
+    val senderName: String?,
+    val body: String?,
+    val attachment: Attachment?
+)
 
 enum class MessageStatus(val value: Int) {
     Pending(0),
@@ -37,7 +58,8 @@ enum class MessageStatus(val value: Int) {
     Seen(5);
 
     companion object {
-        fun max(first: MessageStatus, second: MessageStatus) = if (first.value >= second.value) first else second
+        fun max(first: MessageStatus, second: MessageStatus) =
+            if (first.value >= second.value) first else second
     }
 }
 

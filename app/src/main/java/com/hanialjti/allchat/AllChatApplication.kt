@@ -1,9 +1,11 @@
 package com.hanialjti.allchat
 
 import android.app.Application
+import android.content.Intent
 import com.hanialjti.allchat.data.remote.ConnectionType
 import com.hanialjti.allchat.data.remote.xmpp.model.PingConfigurations
 import com.hanialjti.allchat.data.remote.xmpp.model.XmppConnectionConfig
+import com.hanialjti.allchat.data.tasks.ChatForegroundService
 import com.hanialjti.allchat.di.AllChat
 import org.jivesoftware.smack.android.AndroidSmackInitializer
 import timber.log.Timber
@@ -18,12 +20,14 @@ class AllChatApplication: Application() {
             ConnectionType.Xmpp(
                 XmppConnectionConfig(
                     host = "192.168.0.42",
-                    domain = "localhost",
+                    domain = "hanis-laptop",
                     port = 5222,
-                    pingConfigurations = PingConfigurations.EnablePingMessages(15)
+//                    pingConfigurations = PingConfigurations.EnablePingMessages(15)
                 )
             )
         )
+
+
 
         AndroidSmackInitializer.initialize(this)
 

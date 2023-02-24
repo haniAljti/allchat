@@ -2,6 +2,7 @@ package com.hanialjti.allchat.presentation.conversation
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.paging.cachedIn
 import com.hanialjti.allchat.data.repository.ConversationRepository
 import com.hanialjti.allchat.domain.usecase.*
 import kotlinx.coroutines.flow.collectLatest
@@ -16,7 +17,7 @@ class ConversationsViewModel(
     private val conversationRepository: ConversationRepository
 ) : ViewModel() {
 
-    val contacts = getContactsUseCase()
+    val contacts = conversationRepository.myContacts().cachedIn(viewModelScope)
 
     init {
         viewModelScope.launch {

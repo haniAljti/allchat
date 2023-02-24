@@ -2,7 +2,6 @@ package com.hanialjti.allchat.data.local.room.dao
 
 import androidx.room.*
 import com.hanialjti.allchat.data.local.room.entity.UserEntity
-import com.hanialjti.allchat.data.local.room.model.UserEntry
 import kotlinx.coroutines.flow.Flow
 import java.time.OffsetDateTime
 
@@ -23,6 +22,9 @@ interface UserDao {
 
     @Query("SELECT * FROM users WHERE id IN (:ids)")
     suspend fun getUsers(ids: List<String>): List<UserEntity>
+
+    @Query("Update users SET name = :nickname WHERE id = :userId")
+    suspend fun updateUserName(nickname: String, userId: String)
 
     @Update(onConflict = OnConflictStrategy.REPLACE)
     suspend fun updateUser(vararg user: UserEntity)

@@ -3,6 +3,7 @@ package com.hanialjti.allchat.data.remote
 import com.hanialjti.allchat.common.model.ListChange
 import com.hanialjti.allchat.data.model.ChatState
 import com.hanialjti.allchat.data.remote.model.CallResult
+import com.hanialjti.allchat.data.remote.model.ChatUpdate
 import com.hanialjti.allchat.data.remote.model.RemoteChat
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharedFlow
@@ -11,7 +12,9 @@ interface ChatRemoteDataSource {
 
     val chatChanges: SharedFlow<ListChange<RemoteChat>>
     suspend fun updateMyChatState(chatState: ChatState)
-    fun listenForChatStateUpdates(): Flow<ChatState>
+
+    fun listenForChatUpdates(): Flow<List<ChatUpdate>>
+
     suspend fun createChatRoom(
         roomName: String,
         myId: String
