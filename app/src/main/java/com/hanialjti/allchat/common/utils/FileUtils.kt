@@ -6,10 +6,38 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.RectF
 import android.net.Uri
+import android.webkit.MimeTypeMap
+import android.webkit.URLUtil
+import com.hanialjti.allchat.data.model.FileMetadata
+import timber.log.Timber
 import java.io.ByteArrayOutputStream
 import java.io.IOException
+import java.util.*
 
 
+object FileUtils {
+    fun metadataOrNull(url: String): FileMetadata? {
+
+        if (!url.startsWith("http://") && !url.startsWith("https://")) {
+            Timber.e("the url passed is not a valid one: $url")
+            return null
+        }
+        val fileExtension = MimeTypeMap.getFileExtensionFromUrl(url)
+        val mimeType = MimeTypeMap.getSingleton().getMimeTypeFromExtension(fileExtension.lowercase(
+            Locale.getDefault()))
+        val fileName = guessFileName(url, mimeType)
+
+        return FileMetadata(
+            size = 0,
+            displayName = fileName,
+            mimeType = mimeType
+        )
+    }
+
+    fun guessFileName(url: String, mimeType: String? = null): String? {
+        return URLUtil.guessFileName(url, null, mimeType)
+    }
+}
 fun Bitmap.scaleCenterCrop(newHeight: Int, newWidth: Int): ByteArray? {
 
     val xScale = newWidth.toFloat() / width

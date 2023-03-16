@@ -11,8 +11,7 @@ import androidx.work.WorkerParameters
 import com.hanialjti.allchat.R
 import com.hanialjti.allchat.data.model.Media
 import com.hanialjti.allchat.data.remote.model.CallResult
-import com.hanialjti.allchat.data.remote.ConnectionManager
-import com.hanialjti.allchat.data.remote.registerWorker
+import com.hanialjti.allchat.data.repository.AuthenticationRepository
 import com.hanialjti.allchat.data.repository.FileRepository
 import com.hanialjti.allchat.data.repository.IMessageRepository
 import timber.log.Timber
@@ -23,13 +22,15 @@ class SendMessageWorker(
     parameters: WorkerParameters,
     private val chatRepository: IMessageRepository,
     private val fileRepository: FileRepository,
-    private val connectionManager: ConnectionManager
+    private val authenticationRepository: AuthenticationRepository
 ) : CoroutineWorker(context, parameters) {
 
     override suspend fun doWork(): Result {
         Timber.d("Sending queued messages...")
 
         try {
+
+            authenticationRepository.connectAndDelayRetry(1)
 
             val messages = chatRepository.getAllPendingMessages()
 
@@ -57,11 +58,8 @@ class SendMessageWorker(
                         }
                     }
 
-                    val messageResult = connectionManager.registerWorker(this) {
-                        chatRepository.sendMessageAndRegisterForAcknowledgment(message.id)
-                    }
 
-                    when (messageResult) {
+                    when (chatRepository.sendMessageAndRegisterForAcknowledgment(message.id)) {
                         is CallResult.Success -> {
                             Timber.d("Message with id '${message.id}' Sent successfully!'")
                         }
@@ -79,10 +77,6 @@ class SendMessageWorker(
             return Result.retry()
         }
 
-    }
-
-    companion object {
-        const val MESSAGE_ID_KEY = "message-id"
     }
 
     override suspend fun getForegroundInfo(): ForegroundInfo {
@@ -104,7 +98,7 @@ class SendMessageWorker(
 
         return NotificationCompat.Builder(applicationContext, "send-message-service")
             .setOngoing(true)
-            .setSmallIcon(R.drawable.ic_user)
+            .setSmallIcon(R.drawable.ic_logo_notification)
             .setPriority(NotificationCompat.PRIORITY_MIN)
             .setCategory(Notification.CATEGORY_SERVICE)
             .build()

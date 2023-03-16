@@ -7,11 +7,11 @@ import com.hanialjti.allchat.data.remote.model.RemoteEntityInfo
 import kotlinx.coroutines.flow.Flow
 
 interface InfoRemoteDataSource {
-    suspend fun getUpdatedEntityInfo(id: String): CallResult<RemoteEntityInfo>
-    suspend fun fetchAvatarData(id: String, hash: String?): CallResult<Avatar?>
-    suspend fun fetchNickname(id: String): CallResult<String?>
+    suspend fun getUpdatedEntityInfo(id: String, isGroupChat: Boolean): CallResult<RemoteEntityInfo>
+    suspend fun fetchAvatarData(id: String, hash: String?, isGroupChat: Boolean): CallResult<Avatar?>
+    suspend fun fetchNickname(id: String, isGroupChat: Boolean): CallResult<String?>
     suspend fun updateNickname(nickname: String, id: String? = null): CallResult<Boolean>
     suspend fun updateAvatar(data: ByteArray?, id: String? = null): CallResult<Boolean>
-    suspend fun updatedInfoFlow(): Flow<InfoUpdate>
+    suspend fun infoUpdateStream(): Flow<InfoUpdate>
     suspend fun hashAvatarBytes(avatarBytes: ByteArray): String?
 }

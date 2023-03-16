@@ -3,6 +3,7 @@ package com.hanialjti.allchat.data.remote
 import androidx.work.ListenableWorker
 import com.hanialjti.allchat.common.exception.NotAuthenticatedException
 import com.hanialjti.allchat.data.local.datastore.UserCredentials
+import com.hanialjti.allchat.data.remote.model.CallResult
 import com.hanialjti.allchat.data.remote.model.Presence
 import com.hanialjti.allchat.data.remote.xmpp.model.ConnectionConfig
 import com.hanialjti.allchat.data.remote.xmpp.model.XmppConnectionConfig
@@ -19,7 +20,10 @@ interface ConnectionManager {
 
     fun observeConnectivityStatus(): Flow<Status>
     fun getConfig(): ConnectionConfig
-    suspend fun connect(userCredentials: UserCredentials)
+
+    fun updateSendPresences(sendPresence: Boolean)
+    suspend fun connectAndDelayRetry(userCredentials: UserCredentials, maxRetryCount: Int)
+    suspend fun login(userCredentials: UserCredentials): CallResult<Boolean>
     suspend fun disconnect()
     suspend fun registerWorker(worker: ListenableWorker)
     suspend fun unregisterWorker(worker: ListenableWorker)
@@ -66,6 +70,8 @@ suspend inline fun <T> ConnectionManager.registerWorker(
     }
 
 }
+
+class InvalidUsernameOrPassword(message: String? = null, e: Throwable): Exception(message, e)
 
 sealed class ConnectionType {
     class Xmpp(val connectionCredentials: XmppConnectionConfig) : ConnectionType()

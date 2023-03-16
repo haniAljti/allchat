@@ -10,6 +10,7 @@ import androidx.work.Configuration
 import androidx.work.DelegatingWorkerFactory
 import androidx.work.WorkManager
 import com.hanialjti.allchat.data.remote.ConnectionType
+import org.jivesoftware.smack.android.AndroidSmackInitializer
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.Koin
 import org.koin.core.KoinApplication
@@ -31,6 +32,7 @@ object AllChat {
         context: Context,
         connectionType: ConnectionType
     ): KoinApplication {
+        AndroidSmackInitializer.initialize(context)
         koinApp = koinApplication {
             androidContext(context)
             when (connectionType) {
@@ -41,6 +43,11 @@ object AllChat {
                 else -> {/*TODO*/}
             }
             modules(
+                dispatcherModule,
+                scopeModule,
+                preferencesModule,
+                authenticationModule,
+                filesModule,
                 appModule,
                 roomModule,
                 workerFactoryModule,

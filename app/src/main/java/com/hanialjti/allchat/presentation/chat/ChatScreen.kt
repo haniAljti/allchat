@@ -43,6 +43,7 @@ import androidx.navigation.NavHostController
 import androidx.paging.LoadState
 import androidx.paging.compose.LazyPagingItems
 import androidx.paging.compose.collectAsLazyPagingItems
+import androidx.paging.compose.items
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.PermissionStatus
 import com.google.accompanist.permissions.rememberPermissionState
@@ -59,12 +60,12 @@ import com.hanialjti.allchat.presentation.component.*
 import com.hanialjti.allchat.presentation.conversation.ContactImage
 import com.hanialjti.allchat.presentation.preview_attachment.PreviewAndSendAttachment
 import com.hanialjti.allchat.presentation.ui.toImagePreviewScreen
+import com.hanialjti.allchat.presentation.ui.toInfoScreen
 import com.hanialjti.allchat.presentation.ui.toInviteUsersScreen
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.koin.core.parameter.parametersOf
 import java.io.File
-import java.time.LocalDateTime
 
 
 @RequiresApi(Build.VERSION_CODES.Q)
@@ -143,15 +144,14 @@ fun ChatScreen(
     }
 
     DisposableEffect(
-        Box {
-
+        Box(modifier = Modifier.imePadding()) {
             Column {
                 ChatTopBar(
                     name = uiState.name,
                     status = uiState.status?.asString(),
                     image = uiState.image,
                     onBackClicked = { navController.popBackStack() },
-                    onPersonClicked = { /*TODO*/ },
+                    onPersonClicked = { navController.toInfoScreen(contactId) },
                     onMenuClicked = { showChatMenu = true }
                 ) {
                     DropdownMenu(
@@ -445,15 +445,19 @@ fun MessagesList(
         ) {
 
             items(
-                messages.itemCount,
-                key = { index ->
-                    val message = messages[index]
-                    message?.itemId ?: index
+                items = messages,
+                key = { messageItem ->
+//                    val message = messages[index]
+//                    message?.itemId ?: index
+                    messageItem.itemId ?: messageItem
                 }
-            ) { index ->
-                when (val currentMessage = messages[index]) {
+            ) { message ->
+                when (message) {
                     null -> PlaceHolderMessage()
                     is MessageItem.MessageData -> {
+                        val index by remember {
+                            derivedStateOf { messages.itemSnapshotList.indexOf(message) }
+                        }
                         val nextMessage =
                             if (index < messages.itemCount.minus(1)) messages[index + 1] else null
                         val previousMessage = if (index > 0) messages[index - 1] else null
@@ -463,7 +467,7 @@ fun MessagesList(
                                 .padding(
                                     top = messageTopPadding(
                                         lastMessage = nextMessage,
-                                        currentMessage = currentMessage
+                                        currentMessage = message
                                     )
                                 )
                                 .background(if (flashMessage == index) infiniteTransition.value else Color.Transparent)
@@ -485,53 +489,59 @@ fun MessagesList(
                                     )
                                 }
                             },
-                            onSwipe = {
-                                replyTo(currentMessage)
-                            }
+                            onSwipe = { replyTo(message) }
                         ) {
 
                             val downloadProgress by remember(downloadProgress) {
                                 derivedStateOf {
-                                    if (currentMessage.attachment is Media)
-                                        downloadProgress[currentMessage.id]
+                                    if (message.attachment is Media)
+                                        downloadProgress[message.id]
                                     else null
                                 }
                             }
 
-                            if (currentMessage.isFromMe()) {
+                            if (message.isFromMe()) {
 
                                 val progress by remember(uploadProgress) {
                                     derivedStateOf {
-                                        if (currentMessage.attachment is Media)
-                                            uploadProgress[currentMessage.id]
+                                        if (message.attachment is Media)
+                                            uploadProgress[message.id]
                                         else null
                                     }
                                 }
 
                                 SentMessage(
-                                    message = currentMessage,
+                                    message = message,
                                     uploadProgress = progress,
                                     downloadProgress = downloadProgress,
                                     nextMessage = nextMessage,
                                     previousMessage = previousMessage,
                                     onResumeAudio = {
-                                        onResumeAudio(currentMessage, it)
+                                        onResumeAudio(message, it)
                                     },
-                                    onPauseAudio = { onPauseAudio(currentMessage.attachment as Media) },
-                                    onImageClicked = { onImageClicked(currentMessage.id) },
-                                    onPdfClicked = { onDocumentClicked(currentMessage) },
+                                    onPauseAudio = { onPauseAudio(message.attachment as Media) },
+                                    onImageClicked = { onImageClicked(message.id) },
+                                    onPdfClicked = { onDocumentClicked(message) },
                                     modifier = Modifier.fillMaxWidth(),
-                                    isActiveMessage = currentlyPlaying == currentMessage.attachment,
+                                    isActiveMessage = currentlyPlaying == message.attachment,
                                     onReplyClicked = {
                                         coroutine.launch {
                                             val replyMessageIndex = messages
                                                 .itemSnapshotList
                                                 .indexOfFirst {
                                                     it is MessageItem.MessageData
-                                                            && it.id == currentMessage.replyTo?.id
+                                                            && it.id == message.replyTo?.id
                                                 }
                                             flashMessage = replyMessageIndex
-                                            messageListState.scrollToItem(replyMessageIndex)
+                                            val isItemVisible = messageListState
+                                                .layoutInfo
+                                                .visibleItemsInfo
+                                                .any { it.index == replyMessageIndex }
+
+                                            if (!isItemVisible) {
+                                                messageListState.scrollToItem(replyMessageIndex)
+                                            }
+
                                             flashColor = true
                                             delay(1000)
                                             flashColor = false
@@ -540,23 +550,23 @@ fun MessagesList(
                                 )
                             } else {
                                 ReceivedMessage(
-                                    message = currentMessage,
+                                    message = message,
                                     downloadProgress = downloadProgress,
                                     nextMessage = nextMessage,
                                     previousMessage = previousMessage,
-                                    onResumeAudio = { onResumeAudio(currentMessage, it) },
-                                    onPauseAudio = { onPauseAudio(currentMessage.attachment as Media) },
-                                    onImageClicked = { onImageClicked(currentMessage.id) },
-                                    onPdfClicked = { onDocumentClicked(currentMessage) },
+                                    onResumeAudio = { onResumeAudio(message, it) },
+                                    onPauseAudio = { onPauseAudio(message.attachment as Media) },
+                                    onImageClicked = { onImageClicked(message.id) },
+                                    onPdfClicked = { onDocumentClicked(message) },
                                     modifier = Modifier.fillMaxWidth(),
-                                    isActiveMessage = currentlyPlaying == currentMessage.attachment,
+                                    isActiveMessage = currentlyPlaying == message.attachment,
                                     onReplyClicked = {
                                         coroutine.launch {
                                             val replyMessageIndex = messages
                                                 .itemSnapshotList
                                                 .indexOfFirst {
                                                     it is MessageItem.MessageData
-                                                            && it.id == currentMessage.replyTo?.id
+                                                            && it.id == message.replyTo?.id
                                                 }
                                             flashMessage = replyMessageIndex
                                             messageListState.scrollToItem(replyMessageIndex)
@@ -577,7 +587,7 @@ fun MessagesList(
                                 .padding(horizontal = 5.dp, vertical = 3.dp)
                         ) {
                             Text(
-                                text = currentMessage.date.asSeparator(),
+                                text = message.date.asSeparator(),
                                 color = MaterialTheme.colors.primary,
                                 modifier = Modifier,
                                 fontSize = 16.sp
@@ -599,7 +609,7 @@ fun MessagesList(
                                     .padding(horizontal = 5.dp, vertical = 3.dp)
                             ) {
                                 Text(
-                                    text = currentMessage.date.asString(),
+                                    text = message.date.asString(),
                                     color = MaterialTheme.colors.primary,
                                     modifier = Modifier,
                                     fontSize = 16.sp
@@ -682,6 +692,7 @@ fun ChatTopBar(
                     .fillMaxWidth()
                     .height(79.dp)
                     .padding(PaddingValues(horizontal = 20.dp))
+                    .clickable { onPersonClicked() }
             ) {
                 IconButton(onClick = onBackClicked, modifier = Modifier.padding(end = 20.dp)) {
                     Icon(
@@ -696,8 +707,7 @@ fun ChatTopBar(
                 Column(
                     modifier = Modifier
                         .weight(1f)
-                        .padding(start = 5.dp)
-                        .clickable { onPersonClicked() },
+                        .padding(start = 5.dp),
                 ) {
                     Text(text = name ?: defaultName, color = MaterialTheme.colors.primary)
                     AnimatedVisibility(visible = status != null) {
@@ -734,21 +744,6 @@ fun ChatTopBar(
 
     }
 }
-
-
-@Composable
-fun MessageTime(timestamp: LocalDateTime, modifier: Modifier = Modifier) {
-    val time by remember(timestamp) { mutableStateOf(timestamp.asString(TWO_DIGIT_FORMAT)) }
-    Text(
-        text = time,
-        color = MaterialTheme.colors.primary,
-        fontSize = 12.sp,
-        modifier = modifier
-    )
-}
-
-@Composable
-fun imageBottomCornerRadius(isMessageBodyEmpty: Boolean) = if (isMessageBodyEmpty) 15.dp else 5.dp
 
 @Composable
 fun AudioPlayBackButton(

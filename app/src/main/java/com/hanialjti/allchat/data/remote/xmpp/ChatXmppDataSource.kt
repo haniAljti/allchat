@@ -2,20 +2,18 @@ package com.hanialjti.allchat.data.remote.xmpp
 
 import com.hanialjti.allchat.common.model.ListChange
 import com.hanialjti.allchat.common.utils.Logger
-import com.hanialjti.allchat.data.model.Avatar
 import com.hanialjti.allchat.data.model.ChatState
 import com.hanialjti.allchat.data.remote.ChatRemoteDataSource
 import com.hanialjti.allchat.data.remote.model.*
 import com.hanialjti.allchat.data.remote.xmpp.model.MucBookmark
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.awaitClose
-import kotlinx.coroutines.flow.*
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.merge
 import org.jivesoftware.smack.SmackException.NoResponseException
 import org.jivesoftware.smack.SmackException.NotConnectedException
 import org.jivesoftware.smack.StanzaListener
-import org.jivesoftware.smack.XMPPException
 import org.jivesoftware.smack.XMPPException.XMPPErrorException
 import org.jivesoftware.smack.chat2.ChatManager
 import org.jivesoftware.smack.filter.*
@@ -24,143 +22,43 @@ import org.jivesoftware.smack.roster.Roster
 import org.jivesoftware.smack.roster.RosterListener
 import org.jivesoftware.smack.tcp.XMPPTCPConnection
 import org.jivesoftware.smackx.bookmarks.BookmarkManager
-import org.jivesoftware.smackx.bookmarks.BookmarkedConference
 import org.jivesoftware.smackx.chatstates.ChatStateListener
 import org.jivesoftware.smackx.chatstates.ChatStateManager
-import org.jivesoftware.smackx.iqlast.LastActivityManager
 import org.jivesoftware.smackx.muc.Affiliate
 import org.jivesoftware.smackx.muc.MultiUserChatManager
 import org.jivesoftware.smackx.muc.RoomInfo
 import org.jivesoftware.smackx.muc.packet.GroupChatInvitation
+import org.jivesoftware.smackx.nick.packet.Nick
 import org.jivesoftware.smackx.pep.PepManager
-import org.jivesoftware.smackx.pubsub.AccessModel
-import org.jivesoftware.smackx.pubsub.Affiliation
-import org.jivesoftware.smackx.pubsub.PayloadItem
-import org.jivesoftware.smackx.pubsub.PubSubManager
-import org.jivesoftware.smackx.pubsub.PublishModel
-import org.jivesoftware.smackx.pubsub.SimplePayload
-import org.jivesoftware.smackx.pubsub.form.ConfigureForm
+import org.jivesoftware.smackx.pubsub.*
 import org.jivesoftware.smackx.vcardtemp.VCardManager
-import org.jivesoftware.smackx.xdata.packet.DataForm
 import org.jxmpp.jid.Jid
 import org.jxmpp.jid.impl.JidCreate
 import org.jxmpp.jid.parts.Resourcepart
 import timber.log.Timber
-import java.util.*
 
 class ChatXmppDataSource(
     private val connection: XMPPTCPConnection,
-    private val bookmarkManager: BookmarkManager,
-    private val roster: Roster
+    private val roster: Roster,
+    private val dispatcher: CoroutineDispatcher,
+    private val externalScope: CoroutineScope,
+    private val localMucManager: MucManager,
+    private val mucManager: MultiUserChatManager = MultiUserChatManager.getInstanceFor(connection),
+    private val bookmarkManager: BookmarkManager = BookmarkManager.getBookmarkManager(connection),
+    private val chatManager: ChatManager = ChatManager.getInstanceFor(connection),
+    private val chatStateManager: ChatStateManager = ChatStateManager.getInstance(connection),
+    private val vCardManager: VCardManager = VCardManager.getInstanceFor(connection),
+    private val pubSubManager: PubSubManager = PubSubManager.getInstanceFor(connection),
+    private val pepManager: PepManager = PepManager.getInstanceFor(connection)
 ) : ChatRemoteDataSource {
 
-    private val _chatChanges = MutableSharedFlow<ListChange<RemoteChat>>()
-    override val chatChanges = _chatChanges.asSharedFlow()
-
-    private val lastOnline = LastActivityManager.getInstanceFor(connection)
-    private val mucManager = MultiUserChatManager.getInstanceFor(connection)
-    private val chatManager = ChatManager.getInstanceFor(connection)
-    private val chatStateManager = ChatStateManager.getInstance(connection)
-    private val vCardManager = VCardManager.getInstanceFor(connection)
-    private val pubSubManager = PubSubManager.getInstanceFor(connection)
-    private val pepManager = PepManager.getInstanceFor(connection)
-
-    private val rosterListener = object : RosterListener {
-
-        override fun entriesAdded(addresses: MutableCollection<Jid>?) {
-            Logger.d {
-                "New roster entries are received with jids: ${
-                    addresses?.map {
-                        it.asBareJid().toString()
-                    }
-                }"
-            }
-            addresses?.forEach { jid ->
-                _chatChanges.tryEmit(
-                    ListChange.ItemAdded(
-                        RemoteChat(
-                            id = jid.asBareJid().toString(),
-                            name = null,
-                            isGroupChat = false
-                        )
-                    )
-                )
-            }
-        }
-
-        override fun entriesUpdated(addresses: MutableCollection<Jid>?) {
-            Logger.d {
-                "Updated roster entries are received with jids: ${
-                    addresses?.map {
-                        it.asBareJid().toString()
-                    }
-                }"
-            }
-            addresses?.forEach { jid ->
-                _chatChanges.tryEmit(
-                    ListChange.ItemUpdated(
-                        RemoteChat(
-                            id = jid.asBareJid().toString(),
-                            name = null,
-                            isGroupChat = false
-                        )
-                    )
-                )
-            }
-        }
-
-        override fun entriesDeleted(addresses: MutableCollection<Jid>?) {
-            Logger.d {
-                "Deleted roster entries are received with jids: ${
-                    addresses?.map {
-                        it.asBareJid().toString()
-                    }
-                }"
-            }
-        }
-
-        override fun presenceChanged(presence: Presence?) {
-            Logger.d { "A new presence from ${presence?.from?.asBareJid()} type is ${presence?.type?.name} mode is ${presence?.mode?.name}" }
-        }
-    }
-
-
-    override fun startListeners() {
-        roster.addRosterListener(rosterListener)
-    }
-
-    override fun stopListeners() {
-        roster.removeRosterListener(rosterListener)
-    }
-
-    override suspend fun emitChatChange(change: ListChange<RemoteChat>) {
-        _chatChanges.emit(change)
-    }
-
-    private suspend fun getUpdatedVCard(jid: String) = withContext(Dispatchers.IO) {
-        return@withContext try {
-            vCardManager.loadVCard(JidCreate.entityBareFrom(jid))
-        } catch (e: Exception) {
-            Timber.e(e)
-            null
-        }
-    }
-
-    override suspend fun retrieveContacts() = withContext(Dispatchers.IO) {
+    // TODO Support XEP-0048
+    override suspend fun retrieveGroupChats() = withContext(dispatcher) {
         val conferences = try {
             bookmarkManager
                 .bookmarkedConferences
                 .map {
-                    val roomVCard = getUpdatedVCard(it.jid.asEntityBareJidString())
-
-                    RemoteChat(
-                        id = it.jid.asEntityBareJidString(),
-                        name = roomVCard?.nickName,
-                        avatar = roomVCard?.avatar?.let { data ->
-                            Avatar.Raw(data)
-                        },
-                        isGroupChat = true
-                    )
+                    it.jid.asEntityBareJidString()
                 }
         } catch (e: Exception) {
             Timber.e(e)
@@ -168,16 +66,13 @@ class ChatXmppDataSource(
         }
 
         val conferencesPep = try {
-            val pubSubManager = PubSubManager.getInstanceFor(connection, connection.user.asBareJid())
+            val pubSubManager =
+                PubSubManager.getInstanceFor(connection, connection.user.asBareJid())
             pubSubManager
                 .getLeafNode(MucBookmark.NAMESPACE)
                 .getItems<PayloadItem<MucBookmark>>()
                 .map { item ->
-                    RemoteChat(
-                        id = item.id,
-                        isGroupChat = true,
-                        name = null
-                    )
+                    item.id
                 }
         } catch (e: Exception) {
             Timber.e(e)
@@ -188,63 +83,55 @@ class ChatXmppDataSource(
     }
 
 
-    override suspend fun addUserToContact(userId: String, userName: String): CallResult<String> {
+    override suspend fun addUserToContact(userId: String): CallResult<String> {
         return try {
-            roster.createItemAndRequestSubscription(
-                userId.asJid(),
-                userName,
-                null
-            )
+            roster.createItem(userId.asJid(), null, null)
+            sendPresenceSubscription(userId)
             CallResult.Success(userId)
         } catch (e: Exception) {
             CallResult.Error("An error occurred while adding user to roster", e)
         }
     }
 
-    suspend fun lastActivity(userId: String) = withContext(Dispatchers.IO) {
-        return@withContext try {
-            val lastActivity = lastOnline.getLastActivity(userId.asJid())
-            lastActivity.lastActivity
-        } catch (e: XMPPException) {
-            Timber.e(e)
-            null
-        } catch (e: NoResponseException) {
-            Timber.e(e)
-            null
-        } catch (e: NotConnectedException) {
-            Timber.e(e)
-            null
-        } catch (e: InterruptedException) {
-            Timber.e(e)
-            null
-        }
+    private suspend fun sendPresenceSubscription(to: String) {
+        val nickname = connection.user?.asBareJid()?.toString()?.let { fetchNickname(it) }
+        val presencePacket = connection.stanzaFactory.buildPresenceStanza()
+            .ofType(Presence.Type.subscribe)
+            .to(to.asJid())
+            .apply {
+                if (nickname != null && nickname is CallResult.Success) {
+                    addExtension(
+                        Nick(nickname.data)
+                    )
+                }
+            }
+            .build()
+        connection.sendStanza(presencePacket)
     }
 
+    private suspend fun fetchNickname(id: String): CallResult<String?> =
+        withContext(Dispatchers.IO) {
+            return@withContext try {
+                if (pepManager.isSupported) {
+                    val pubSubManager =
+                        PubSubManager.getInstanceFor(connection, JidCreate.bareFrom(id))
+                    val nicknameNode = pubSubManager.getLeafNode(Nick.NAMESPACE)
+                    val items = nicknameNode.getItems<PayloadItem<Nick>>()
+                    CallResult.Success(items.first().payload.name)
+                } else {
+                    val vCard = vCardManager.loadVCard()
+                    CallResult.Success(vCard.nickName)
+                }
+            } catch (e: Exception) {
+                CallResult.Error("Error while retrieving nickname")
+            }
+        }
 
     override suspend fun createChatRoom(
         roomName: String,
-        myId: String
-    ): CallResult<String> {
-        return try {
-            val roomId = UUID.randomUUID().toString()
-            val roomJid = roomId.plus("@").plus(mucManager.mucServiceDomains.first())
-            val muc = mucManager.getMultiUserChat(roomJid.asJid().asEntityBareJidIfPossible())
-            val pubSubNode = createPubSubNodeForRoom(roomId)
-
-            muc.create(Resourcepart.from(myId))
-                .configFormManager
-                .makeMembersOnly()
-                .setPubSubNode(pubSubNode)
-                .submitConfigurationForm()
-
-            bookmarkConference(roomJid, roomName)
-            joinRoom(roomJid, myId)
-            CallResult.Success(roomJid)
-        } catch (e: Exception) {
-            Timber.e(e)
-            CallResult.Error("An error occurred while creating chat room", e)
-        }
-    }
+        myId: String,
+        invitees: Set<String>
+    ): CallResult<String> = localMucManager.createChatRoom(roomName, myId, invitees)
 
     @kotlin.jvm.Throws(
         XMPPErrorException::class,
@@ -254,13 +141,17 @@ class ChatXmppDataSource(
     )
     private fun createPubSubNodeForRoom(roomId: String): String {
         val node = pubSubManager.getOrCreateLeafNode(roomId)
-        val configureForm = ConfigureForm(DataForm.builder().build()).fillableForm.apply {
-            accessModel = AccessModel.whitelist
-            publishModel = PublishModel.subscribers
-            isDeliverPayloads = true
-        }
+
+        val configureForm = node
+            .nodeConfiguration
+            .fillableForm
+            .apply {
+                accessModel = AccessModel.whitelist
+                publishModel = PublishModel.subscribers
+                isDeliverPayloads = true
+            }
         node.sendConfigurationForm(configureForm)
-        return node.id
+        return "xmpp:${node.id}@${pubSubManager.serviceJid}"
     }
 
 
@@ -285,7 +176,6 @@ class ChatXmppDataSource(
 //                        RemoteChat(
 //                            roomAddress,
 //                            roomInfo.name,
-//
 //                        )
 //                    )
                 }
@@ -340,7 +230,7 @@ class ChatXmppDataSource(
             CallResult.Error(message = "No response from server", cause = e)
         } catch (e: NotConnectedException) {
             CallResult.Error(message = "Not connected", cause = e)
-        } catch (e: XMPPException.XMPPErrorException) {
+        } catch (e: XMPPErrorException) {
             CallResult.Error(message = "Xmpp error", cause = e)
         } catch (e: InterruptedException) {
             CallResult.Error(message = "Request interrupted", cause = e)
@@ -359,7 +249,7 @@ class ChatXmppDataSource(
             CallResult.Error(message = "No response from server", cause = e)
         } catch (e: NotConnectedException) {
             CallResult.Error(message = "Not connected", cause = e)
-        } catch (e: XMPPException.XMPPErrorException) {
+        } catch (e: XMPPErrorException) {
             CallResult.Error(message = "Xmpp error", cause = e)
         } catch (e: InterruptedException) {
             CallResult.Error(message = "Request interrupted", cause = e)
@@ -374,7 +264,7 @@ class ChatXmppDataSource(
             from?.let {
                 launch {
                     send(
-                        listOf(ChatStateUpdate(state.toConversationState(conversation, it)))
+                        ChatStateUpdate(state.toConversationState(conversation, it))
                     )
                 }
             }
@@ -387,6 +277,17 @@ class ChatXmppDataSource(
     }
 
     private fun listenForNewContacts() = callbackFlow {
+
+        val entries = roster.entries
+        entries.forEach { rosterEntry ->
+            trySend(
+                NewContactUpdate(
+                    rosterEntry.jid.asBareJid().toString(),
+                    isGroupChat = false
+                )
+            )
+        }
+
         val rosterListener = object : RosterListener {
 
             override fun entriesAdded(addresses: MutableCollection<Jid>) {
@@ -397,14 +298,13 @@ class ChatXmppDataSource(
                         }
                     }"
                 }
-                launch {
-                    val itemsAdded = addresses.map { jid ->
+                addresses.forEach { jid ->
+                    trySend(
                         NewContactUpdate(
                             jid.asBareJid().toString(),
                             isGroupChat = false
                         )
-                    }
-                    send(itemsAdded)
+                    )
                 }
             }
 
@@ -416,15 +316,15 @@ class ChatXmppDataSource(
                         }
                     }"
                 }
-                launch {
-                    val itemsUpdated = addresses.map { jid ->
+                addresses.forEach { jid ->
+                    trySend(
                         NewContactUpdate(
                             jid.asBareJid().toString(),
                             isGroupChat = false
                         )
-                    }
-                    send(itemsUpdated)
+                    )
                 }
+
             }
 
             override fun entriesDeleted(addresses: MutableCollection<Jid>?) {
@@ -437,19 +337,17 @@ class ChatXmppDataSource(
                 }
             }
 
-            override fun presenceChanged(presence: Presence?) {
-                Logger.d { "A new presence from ${presence?.from?.asBareJid()} type is ${presence?.type?.name} mode is ${presence?.mode?.name}" }
-            }
+            override fun presenceChanged(presence: Presence?) {}
         }
 
         roster.addRosterListener(rosterListener)
-
         awaitClose { roster.removeRosterListener(rosterListener) }
     }
 
-    override fun listenForChatUpdates(): Flow<List<ChatUpdate>> = merge(
+    override fun chatUpdatesStream(): Flow<ChatUpdate> = merge(
         listenForChatStateUpdates(),
-        listenForNewContacts()
+        listenForNewContacts(),
+        localMucManager.bookmarkedConferencesStream()
     )
 
     override suspend fun updateMyChatState(chatState: ChatState) {
@@ -479,7 +377,7 @@ class ChatXmppDataSource(
         }
     }
 
-    suspend fun addGroupChatToContacts(
+    private suspend fun addGroupChatToContacts(
         roomId: String,
         roomName: String
     ): CallResult<String> {
@@ -495,14 +393,38 @@ class ChatXmppDataSource(
         chatRoomId: String,
         chatRoomName: String
     ) {
+        try {
+            if (pepManager.isSupported) {
+                val pubSub = pepManager.pepPubSubManager
+                val bookmarksNode = pubSub.getOrCreateLeafNode(MucBookmark.NAMESPACE)
 
-//        bookmarkManager.addBookmarkedConference(
-//            chatRoomName,
-//            chatRoomId.asJid().asEntityBareJidIfPossible(),
-//            true,
-//            null,
-//            null
-//        )
+                val configureForm = bookmarksNode
+                    .nodeConfiguration
+                    .fillableForm
+                    .apply {
+                        setPersistentItems(true)
+                        accessModel = AccessModel.whitelist
+                        setAnswer("pubsub#send_last_published_item", "never")
+                        maxItems = 1000
+                    }
+                bookmarksNode.sendConfigurationForm(configureForm)
+                pepManager.publish(
+                    MucBookmark.NAMESPACE,
+                    PayloadItem(chatRoomId, MucBookmark())
+                )
+            } else {
+                bookmarkManager.addBookmarkedConference(
+                    chatRoomName,
+                    chatRoomId.asJid().asEntityBareJidIfPossible(),
+                    true,
+                    null,
+                    null
+                )
+            }
+        } catch (e: Exception) {
+            Logger.e(e)
+
+        }
     }
 
 }

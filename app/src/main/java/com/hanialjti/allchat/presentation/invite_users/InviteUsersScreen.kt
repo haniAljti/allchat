@@ -24,7 +24,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
@@ -46,7 +45,7 @@ fun InviteUsersScreen(
 
     val uiState by remember(viewModel) { viewModel.uiState }.collectAsState()
 
-    SelectableUsersScreen(
+    SelectableUsers(
         title = "Select users to invite",
         modifier = Modifier.fillMaxSize(),
         onBackPressed = { navController.popBackStack() },
@@ -66,12 +65,12 @@ fun InviteUsersScreen(
 }
 
 @Composable
-fun SelectableUsersScreen(
+fun SelectableUsers(
     title: String,
     modifier: Modifier = Modifier,
     onBackPressed: () -> Unit,
-    allUsers: List<User>,
-    selectedUsers: List<User>,
+    allUsers: Set<User>,
+    selectedUsers: Set<User>,
     onSelectedValueChanged: (User, Boolean) -> Unit,
     onDoneClicked: () -> Unit,
     doneButtonText: String,
@@ -106,17 +105,17 @@ fun SelectableUsersScreen(
 
 @Composable
 fun SelectableUsersList(
-    allUsers: List<User>,
-    selectedUsers: List<User>,
+    allUsers: Set<User>,
+    selectedUsers: Set<User>,
     onSelectedValueChanged: (User, Boolean) -> Unit
 ) {
 
     LazyColumn {
         items(
             count = allUsers.size,
-            key = { allUsers[it].id ?: it }
+            key = { index -> allUsers.elementAt(index).id }
         ) { index ->
-            val user = allUsers[index]
+            val user = allUsers.elementAt(index)
 
             SelectableUser(
                 user = user,

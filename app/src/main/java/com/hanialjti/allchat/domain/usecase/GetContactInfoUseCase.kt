@@ -2,7 +2,7 @@ package com.hanialjti.allchat.domain.usecase
 
 import com.hanialjti.allchat.R
 import com.hanialjti.allchat.common.utils.asUiDate
-import com.hanialjti.allchat.data.model.Contact
+import com.hanialjti.allchat.data.model.ContactWithLastMessage
 import com.hanialjti.allchat.data.repository.ConversationRepository
 import com.hanialjti.allchat.data.repository.UserRepository
 import com.hanialjti.allchat.data.model.ContactInfo
@@ -26,7 +26,7 @@ class GetContactInfoUseCase(
         }
 
 
-    private suspend fun Contact.getConversationContent(): UiText? {
+    private suspend fun ContactWithLastMessage.getConversationContent(): UiText? {
 
         return if (isGroupChat && composing.isNotEmpty()) {
             val users = userRepository.getUsers(composing)

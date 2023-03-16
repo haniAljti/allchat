@@ -4,7 +4,6 @@ import android.media.MediaMetadataRetriever
 import android.os.Build
 import androidx.annotation.RequiresApi
 import androidx.paging.*
-import androidx.room.withTransaction
 import com.hanialjti.allchat.R
 import com.hanialjti.allchat.data.local.room.AllChatLocalRoomDatabase
 import com.hanialjti.allchat.data.local.room.entity.MessageEntity
@@ -13,8 +12,6 @@ import com.hanialjti.allchat.data.local.room.entity.asNetworkMessage
 import com.hanialjti.allchat.data.model.*
 import com.hanialjti.allchat.data.remote.*
 import com.hanialjti.allchat.data.remote.model.*
-import com.hanialjti.allchat.data.remote.model.Location
-import com.hanialjti.allchat.data.remote.model.Media
 import com.hanialjti.allchat.data.tasks.MessageTasksDataSource
 import com.hanialjti.allchat.presentation.chat.MessageRemoteMediator
 import com.hanialjti.allchat.presentation.conversation.UiText
@@ -26,25 +23,29 @@ import timber.log.Timber
 import java.util.*
 
 class MessageRepository(
+    private val messageLocalDataStore: AllChatLocalRoomDatabase,
     private val messageTasksDataSource: MessageTasksDataSource,
     private val messageRemoteDataSource: MessageRemoteDataSource,
-    private val localDb: AllChatLocalRoomDatabase,
-    private val connectionManager: ConnectionManager,
+    private val authenticationRepository: AuthenticationRepository,
     private val preferencesRepository: PreferencesRepository,
     private val fileRepository: FileRepository,
     private val externalScope: CoroutineScope,
     private val dispatcher: CoroutineDispatcher
 ) : IMessageRepository {
 
-    private val messageDao = localDb.messageDao()
-    private val markerDao = localDb.markerDao()
+    private val messageDao = messageLocalDataStore.messageDao()
 
-    private val ownerId get() = connectionManager.userId
+    private suspend fun loggedInUser() = authenticationRepository.loggedInUserStream.first()
 
     @OptIn(ExperimentalPagingApi::class)
-    private fun messages(conversation: String, owner: String?) = Pager(
+    private fun messages(conversation: String, owner: String) = Pager(
         config = PagingConfig(pageSize = 100, enablePlaceholders = true),
-        remoteMediator = MessageRemoteMediator(conversation, this),
+        remoteMediator = MessageRemoteMediator(
+            owner,
+            conversation,
+            messageLocalDataStore,
+            messageRemoteDataSource
+        ),
         pagingSourceFactory = { messageDao.getMessagesByConversation(conversation, owner) }
     ).flow
         .map { messages ->
@@ -62,7 +63,14 @@ class MessageRepository(
                             attachment = replyingTo.attachment
                         )
                     } else null
-                    it.asMessage().copy(replyTo = replyingToMessage)
+                    it.asMessage().copy(
+                        replyTo = replyingToMessage,
+                        status = if (it.type == MessageType.Chat && it.markers.isNotEmpty()) it.markers.values.first().marker.toMessageStatus()
+                        else {
+                            if (it.markers.any { it.value.marker == Marker.Delivered }) MessageStatus.Delivered
+                            else MessageStatus.Sent
+                        }
+                    )
                 }
                 .insertSeparators { before, after ->
                     when {
@@ -96,13 +104,14 @@ class MessageRepository(
     }
 
     override suspend fun getAllPendingMessages(): List<MessageEntity> {
-        return ownerId?.let { owner -> messageDao.getPendingMessagesByOwner(owner) } ?: listOf()
+        return loggedInUser()?.let { owner -> messageDao.getPendingMessagesByOwner(owner) }
+            ?: listOf()
     }
 
 
     override suspend fun sendSeenMarkerForMessage(externalMessageId: String) =
         externalScope.async(dispatcher) {
-            if (!connectionManager.getConfig().chatMarkersEnabled) {
+            if (!preferencesRepository.clientPreferences().enableChatMarkers) {
                 return@async CallResult.Success(true) // chat markers are not enabled
             }
             val message = messageDao.getMessageEntryByRemoteId(externalMessageId)
@@ -121,7 +130,7 @@ class MessageRepository(
 
     override suspend fun setMessagesAsRead(chatId: String) {
         externalScope.launch {
-            val owner = ownerId
+            val owner = loggedInUser()
                 ?: return@launch com.hanialjti.allchat.common.utils.Logger.e { "User is not signed in" }
 
             messageDao.setAllMessagesAsRead(owner, chatId)
@@ -179,7 +188,7 @@ class MessageRepository(
         val sendResult = messageRemoteDataSource.sendMessage(
             message = messageToSend,
             thread = messageToSend.thread,
-            isMarkable = connectionManager.getConfig().chatMarkersEnabled
+            isMarkable = preferencesRepository.clientPreferences().enableChatMarkers
         )
 
         if (sendResult is CallResult.Success) {
@@ -201,7 +210,7 @@ class MessageRepository(
         chatId: String,
         pageSize: Int
     ) = withContext(Dispatchers.IO) {
-        val owner = ownerId
+        val owner = loggedInUser()
             ?: return@withContext MessageQueryResult.Error(SecurityException("User is not signed in"))
 
         val oldestMessage = messageDao.getFirstMessageByChatId(owner, chatId)
@@ -224,7 +233,7 @@ class MessageRepository(
         pageSize: Int
     ) = withContext(Dispatchers.IO) {
 
-        val owner = ownerId
+        val owner = loggedInUser()
             ?: return@withContext MessageQueryResult.Error(SecurityException("User is not signed in"))
 
         val newestMessage = messageDao.getMostRecentMessageByChatId(owner, chatId)
@@ -259,103 +268,98 @@ class MessageRepository(
         message: RemoteMessage,
         owner: String
     ) {
+//        val messageToUpdate = messageDao.getMessageByRemoteId(message.id)
 
-        val messageToUpdate = messageDao.getMessageByRemoteId(message.id)
+//        val attachment = if (messageToUpdate?.attachment == null) {
+//            when (val attachment = message.attachment) {
+//                is Location -> com.hanialjti.allchat.data.model.Location(
+//                    attachment.lat,
+//                    attachment.lng
+//                )
+//                is Media -> {
+//                    val metadata = FileUtils.metadataOrNull(attachment.url)
+//                    com.hanialjti.allchat.data.model.Media(
+//                        type = Attachment.Type.fromMimeType(metadata?.mimeType),
+//                        url = attachment.url,
+//                        cacheUri = null,
+//                        fileName = metadata?.displayName,
+//                        mimeType = metadata?.mimeType
+//                    )
+//                }
+//                else -> {
+//                    null
+//                }
+//            }
+//
+//        } else messageToUpdate.attachment
 
-        val attachment = if (messageToUpdate?.attachment == null) {
-            when (val attachment = message.attachment) {
-                is Location -> com.hanialjti.allchat.data.model.Location(
-                    attachment.lat,
-                    attachment.lng
-                )
-                is Media -> {
-                    val metadata = fileRepository.metadataOrNull(attachment.url)
-                    com.hanialjti.allchat.data.model.Media(
-                        type = Attachment.Type.fromMimeType(metadata?.mimeType),
-                        url = attachment.url,
-                        cacheUri = null,
-                        fileName = metadata?.displayName,
-                        mimeType = metadata?.mimeType
-                    )
-                }
-                else -> {
-                    null
-                }
-            }
+        updateMessage(message.asMessageEntity().copy(ownerId = owner))
 
-        } else messageToUpdate.attachment
-
-        updateMessage(
-            message.asMessageEntity().copy(
-                attachment = attachment,
-                ownerId = owner,
-                thread = message.thread ?: messageToUpdate?.thread
-            )
-        )
-
-        if (messageToUpdate?.contactId != null) {
-
-            message.markers.forEach { (userId, marker) ->
-
-//                val userExists = userDao.exists(userId)
-                if (userId != owner /**&& userExists*/) {
-                    markerDao.insertMarkersForMessagesBefore(
-                        sender = userId,
-                        marker = marker,
-                        timestamp = message.timestamp,
-                        owner = owner,
-                        chatId = messageToUpdate.contactId
-                    )
-                }
-            }
-
-            val highestMarker = markerDao.getHighestMarkerSentByEveryParticipant(
-                messageId = message.id,
-                chatId = messageToUpdate.contactId
-            )
-
-            messageDao.updateStatusForMessagesBeforeTimestamp(
-                highestMarker,
-                message.timestamp,
-                owner,
-                messageToUpdate.contactId
-            )
-        }
+//        if (message.chatId != null) {
+//
+//            message.markers.forEach { (userId, marker) ->
+//
+////                val userExists = userDao.exists(userId)
+//
+//                if (userId != owner
+//                /**&& userExists*/
+//                ) {
+//                    markerDao.insertMarkersForMessagesBefore(
+//                        sender = userId,
+//                        marker = marker,
+//                        timestamp = message.timestamp,
+//                        owner = owner,
+//                        chatId = message.chatId
+//                    )
+//                }
+//            }
+//
+//            val highestMarker = markerDao.getLatestMarkersSentByAllParticipants(
+//                messageId = message.id,
+//                chatId = message.chatId
+//            )
+//
+//            messageDao.updateStatusForMessagesBeforeTimestamp(
+//                highestMarker,
+//                message.timestamp,
+//                owner,
+//                message.chatId
+//            )
+//        }
     }
 
     private suspend fun saveMessagePage(
         messagePage: MessagePage
     ) {
-        val owner = ownerId
+        val owner = loggedInUser()
 
         if (owner == null) {
             Timber.e("User is not signed in")
             return
         }
 
-        localDb.withTransaction {
-            messagePage
-                .messageList
-                .map { message ->
-                    withContext(dispatcher) {
-                        async {
-                            when (message) {
-                                is RemoteMessage -> {
-                                    handleMessage(message, owner)
-                                }
-                                is RemoteGroupInvitation -> {
+        messagePage
+            .messageList
+            .map { message ->
+                withContext(dispatcher) {
+                    async {
+                        when (message) {
+                            is RemoteMessage -> {
+                                handleMessage(message, owner)
+                            }
+                            is RemoteGroupInvitation -> {
 
-                                }
                             }
                         }
                     }
-                }.awaitAll()
-        }
+                }
+            }.awaitAll()
 
     }
 
-    override suspend fun syncMessages(owner: String) {
-        val mostRecentMessage = messageDao.getMostRecentMessage(owner)
+    override suspend fun syncMessages(chatId: String) {
+        val loggedInUser = loggedInUser() ?: return
+        val mostRecentMessage = messageDao.getMostRecentMessage(loggedInUser)
         syncMessages(mostRecentMessage?.asNetworkMessage(), 50)
     }
 
@@ -368,20 +372,18 @@ class MessageRepository(
                     is RemoteMessage -> {
                         Timber.d("received new message $message")
 
-                        localDb.withTransaction {
+                        val owner = loggedInUser()
 
-                            val owner = ownerId
-
-                            if (owner == null) {
-                                Timber.e("User is not signed in. Received messages will not be saved")
-                                return@withTransaction
-                            }
-
-                            handleMessage(message, owner)
-
-                            message.chatId?.let { setMessagesAsRead(it) }
-
+                        if (owner == null) {
+                            Timber.e("User is not signed in. Received messages will not be saved")
+                            return@onEach
                         }
+
+                        handleMessage(message, owner)
+
+                        message.chatId?.let { setMessagesAsRead(it) }
+
+
                     }
                     is RemoteGroupInvitation -> {
 

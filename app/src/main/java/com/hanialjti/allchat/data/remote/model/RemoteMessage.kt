@@ -1,6 +1,7 @@
 package com.hanialjti.allchat.data.remote.model
 
 import com.hanialjti.allchat.data.local.room.entity.MessageEntity
+import com.hanialjti.allchat.data.local.room.entity.MessageMarker
 import com.hanialjti.allchat.data.model.Marker
 import com.hanialjti.allchat.data.model.MessageStatus
 import com.hanialjti.allchat.data.model.MessageType
@@ -38,6 +39,8 @@ fun RemoteMessage.asMessageEntity() = MessageEntity(
     senderId = sender,
     status = messageStatus,
     type = type,
-    archiveId = messageArchiveId
+    archiveId = messageArchiveId,
+    attachment = attachment?.toAttachment(),
+    markers = markers.mapValues { MessageMarker(it.value) }
 )
 

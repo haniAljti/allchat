@@ -1,9 +1,12 @@
 package com.hanialjti.allchat.data.remote.xmpp
 
 import com.hanialjti.allchat.data.model.MessageType
+import com.hanialjti.allchat.data.remote.model.Location
+import com.hanialjti.allchat.data.remote.model.Media
+import com.hanialjti.allchat.data.remote.model.RemoteAttachment
 import com.hanialjti.allchat.data.remote.model.RemoteGroupInvitation
 import com.hanialjti.allchat.data.remote.xmpp.model.ChatMarkerWrapper
-import com.hanialjti.allchat.data.remote.xmpp.model.VCard
+import com.hanialjti.allchat.data.remote.xmpp.model.OutOfBandData
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.jivesoftware.smack.SmackException.NoResponseException
@@ -16,14 +19,17 @@ import org.jivesoftware.smack.tcp.XMPPTCPConnection
 import org.jivesoftware.smackx.chat_markers.element.ChatMarkersElements
 import org.jivesoftware.smackx.chatstates.ChatState
 import org.jivesoftware.smackx.forward.packet.Forwarded
+import org.jivesoftware.smackx.geoloc.packet.GeoLocation
 import org.jivesoftware.smackx.muc.MucConfigFormManager
 import org.jivesoftware.smackx.muc.MultiUserChat
 import org.jivesoftware.smackx.muc.MultiUserChatException.MucConfigurationNotSupportedException
 import org.jivesoftware.smackx.muc.packet.GroupChatInvitation
+import org.jivesoftware.smackx.pubsub.form.FillableConfigureForm
 import org.jivesoftware.smackx.vcardtemp.VCardManager
-import org.jivesoftware.smackx.xdata.form.FillableForm
+import org.jivesoftware.smackx.vcardtemp.packet.VCard
 import org.jxmpp.jid.BareJid
 import org.jxmpp.jid.EntityBareJid
+import org.jxmpp.jid.Jid
 import org.jxmpp.jid.impl.JidCreate
 
 
@@ -33,13 +39,21 @@ fun Message.Type.toMessageType() =
 suspend fun String.asJid(): BareJid =
     withContext(Dispatchers.IO) { return@withContext JidCreate.bareFrom(this@asJid) }
 
-@Throws(MucConfigurationNotSupportedException::class)
-fun MucConfigFormManager.setPubSubNode(node: String): MucConfigFormManager {
-    val field = MucConfigFormManager::class.java.getDeclaredField("answerForm")
-    field.isAccessible = true
-    val answerForm = field.get(FillableForm::class) as FillableForm
-    answerForm.setAnswer("muc#roomconfig_pubsub", node)
-    return this
+fun Message.extractAttachment(): RemoteAttachment? {
+    val mediaAttachment = getExtension(OutOfBandData.NAMESPACE) as? OutOfBandData
+    val locationAttachment = getExtension(GeoLocation.NAMESPACE) as? GeoLocation
+
+    return when {
+        mediaAttachment != null -> Media(
+            url = mediaAttachment.url,
+            desc = mediaAttachment.desc
+        )
+        locationAttachment != null -> Location(
+            lat = locationAttachment.lat,
+            lng = locationAttachment.lon
+        )
+        else -> null
+    }
 }
 
 fun MessageType.toXmppMessageType() = when (this) {
@@ -158,24 +172,29 @@ fun MultiUserChat.inviteDirectly(user: EntityBareJid?) {
     xmppConnection.sendStanza(message)
 }
 
-/**
- * @param roomAddress only pass a roomAddress in case you want to set as a MUC VCard
- */
-suspend fun VCardManager.updateVCard(
-    vcard: VCard,
-    connection: XMPPTCPConnection,
-    roomAddress: String? = null
-) {
-    // XEP-54 § 3.2 "A user may publish or update his or her vCard by sending an IQ of type "set" with no 'to' address…"
+@Throws(MucConfigurationNotSupportedException::class)
+fun MucConfigFormManager.setPubSubNode(node: String): MucConfigFormManager {
+    val field = this.javaClass.getDeclaredField("answerForm")
+    field.isAccessible = true
+    val setAnswer = field.type.getDeclaredMethod("setAnswer", String::class.java, CharSequence::class.java)
+    setAnswer.invoke(field.get(this), "muc#roomconfig_pubsub", node)
+//    answerForm.setAnswer("muc#roomconfig_pubsub", node)
+    return this
+}
 
+@Throws(
+    NoResponseException::class,
+    XMPPErrorException::class,
+    NotConnectedException::class,
+    InterruptedException::class
+)
+suspend fun VCardManager.saveVCard(vcard: VCard, roomAddress: String, connection: XMPPTCPConnection) {
     // XEP-54 § 3.2 "A user may publish or update his or her vCard by sending an IQ of type "set" with no 'to' address…"
-    vcard.to = roomAddress?.asJid()
+    vcard.to = roomAddress.asJid()
     vcard.type = IQ.Type.set
-
-    // Also make sure to generate a new stanza id (the given vcard could be a vcard result), in which case we don't
-    // want to use the same stanza id again (although it wouldn't break if we did)
     // Also make sure to generate a new stanza id (the given vcard could be a vcard result), in which case we don't
     // want to use the same stanza id again (although it wouldn't break if we did)
     vcard.setStanzaId()
     connection.createStanzaCollectorAndSend(vcard).nextResultOrThrow<Stanza>()
 }
+

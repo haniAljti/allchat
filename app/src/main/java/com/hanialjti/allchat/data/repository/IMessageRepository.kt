@@ -25,7 +25,7 @@ interface IMessageRepository {
     suspend fun getAllPendingMessages(): List<MessageEntity>
     suspend fun downloadAttachment(message: MessageItem.MessageData)
     suspend fun resendAllPendingMessages()
-    suspend fun syncMessages(owner: String)
+    suspend fun syncMessages(chatId: String)
     suspend fun getMessageByExternalId(externalMessageId: String): Flow<MessageItem.MessageData>?
     suspend fun getMessage(messageId: String): MessageEntity?
     fun observeLastMessageNotSentByOwner(owner: String, conversationId: String): Flow<MessageEntity>

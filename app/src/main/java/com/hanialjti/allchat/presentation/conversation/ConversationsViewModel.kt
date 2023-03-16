@@ -4,34 +4,23 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.paging.cachedIn
 import com.hanialjti.allchat.data.repository.ConversationRepository
+import com.hanialjti.allchat.data.repository.IMessageRepository
 import com.hanialjti.allchat.domain.usecase.*
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.launch
 
 class ConversationsViewModel(
-    private val syncChatsUseCase: SyncChatsUseCase,
     private val syncMessagesUseCase: SyncMessagesUseCase,
-    private val getContactsUseCase: GetContactsUseCase,
-    private val createChatRoomUseCase: CreateChatRoomUseCase,
+    private val messageRepository: IMessageRepository,
     private val getConnectedUserUseCase: GetConnectedUserUseCase,
     private val conversationRepository: ConversationRepository
 ) : ViewModel() {
 
     val contacts = conversationRepository.myContacts().cachedIn(viewModelScope)
 
-    init {
-        viewModelScope.launch {
-            getConnectedUserUseCase().collectLatest {
-                syncChatsUseCase()
-                syncMessagesUseCase()
-            }
-        }
-//        viewModelScope.launch { conversationRepository.listenForConversationUpdates() }
-    }
+    private val syncedContacts = listOf<String>()
 
-    fun createChatRoom() {
-        viewModelScope.launch {
-            createChatRoomUseCase()
+    fun syncMessages(chat: String) {
+        if (!syncedContacts.contains(chat)) {
+//            messageRepository.syncMessages()
         }
     }
 

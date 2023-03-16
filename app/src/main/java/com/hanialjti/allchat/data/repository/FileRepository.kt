@@ -13,7 +13,6 @@ import android.text.TextUtils
 import android.webkit.MimeTypeMap
 import android.webkit.URLUtil
 import androidx.annotation.RequiresApi
-import androidx.core.net.toUri
 import com.google.modernstorage.storage.AndroidFileSystem
 import com.google.modernstorage.storage.toOkioPath
 import com.google.modernstorage.storage.toUri
@@ -33,7 +32,7 @@ import java.util.*
 
 
 class FileRepository(
-    private val context: Context,
+    context: Context,
     private val dispatcher: CoroutineDispatcher,
     private val remoteDataSource: FileXmppDataSource,
     private val fileDownloader: DefaultFileDownloader,
@@ -214,7 +213,7 @@ class FileRepository(
     fun getFileName(uri: Uri): String? {
         var result: String? = null
         if (uri.scheme.equals("content")) {
-            val cursor = context.contentResolver.query(uri, null, null, null, null)
+            val cursor = cr.query(uri, null, null, null, null)
 
             cursor?.use {
                 if (it.moveToFirst()) {

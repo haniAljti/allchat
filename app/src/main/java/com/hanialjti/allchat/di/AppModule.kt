@@ -32,7 +32,8 @@ import org.koin.androidx.workmanager.dsl.worker
 import org.koin.core.qualifier.named
 import org.koin.dsl.module
 
-val appModule = module {
+
+val dispatcherModule = module {
     single(qualifier = named(DispatcherQualifiers.Main)) {
         Dispatchers.Main
     }
@@ -42,6 +43,9 @@ val appModule = module {
     single(qualifier = named(DispatcherQualifiers.Io)) {
         Dispatchers.IO
     }
+}
+
+val scopeModule = module {
     single(qualifier = named(ScopeQualifiers.Application)) {
         CoroutineScope(
             SupervisorJob() + get<CoroutineDispatcher>(
@@ -51,6 +55,9 @@ val appModule = module {
             )
         )
     }
+}
+
+val preferencesModule = module {
     single {
         CryptoManager()
     }
@@ -58,14 +65,37 @@ val appModule = module {
         PreferencesLocalDataStore(androidContext())
     }
     single {
+        PreferencesRepository(
+            get()
+        )
+    }
+}
+
+val authenticationModule = module {
+    single {
+        AuthenticationRepository(
+            get(),
+            get(),
+            get(),
+            get(named(DispatcherQualifiers.Io)),
+            get(named(ScopeQualifiers.Application)),
+        )
+    }
+    single {
+        AuthenticationViewModel(get())
+    }
+}
+
+val filesModule = module {
+    single {
         DefaultFileDownloader(externalScope = get(named(ScopeQualifiers.Application)))
     }
     single {
         FileRepository(androidContext(), get(named(DispatcherQualifiers.Io)), get(), get())
     }
-    single {
-        PreferencesRepository(get())
-    }
+}
+
+val appModule = module {
     single {
         InfoRepository(
             get(),
@@ -80,7 +110,8 @@ val appModule = module {
             get(),
             get(),
             get(),
-            get()
+            get(named(DispatcherQualifiers.Io)),
+            get(named(ScopeQualifiers.Application)),
         )
     }
     single<IMessageRepository> {
@@ -95,7 +126,7 @@ val appModule = module {
             get(qualifier = named(DispatcherQualifiers.Io))
         )
     }
-    single(createdAtStart = true) {
+    single {
         UserRepository(get(), get(), get(), get())
     }
     single {
@@ -119,19 +150,16 @@ val appModule = module {
         PreviewAttachmentViewModel(params.get(), get())
     }
     factory {
-        CreateChatRoomViewModel(get())
+        CreateChatRoomViewModel(get(), get())
     }
     single {
         EditUserInfoViewModel(get())
     }
     factory {
-        ConversationsViewModel(get(), get(), get(), get(), get(), get())
+        ConversationsViewModel(get(), get(), get(), get())
     }
     factory { params ->
         InviteUsersViewModel(params.get(), get(), get())
-    }
-    single {
-        AuthenticationViewModel(get())
     }
     single {
         MainViewModel(get(), get())
@@ -164,7 +192,19 @@ val roomModule = module {
         get<AllChatLocalRoomDatabase>().userDao()
     }
     single {
+        get<AllChatLocalRoomDatabase>().blockedUserDao()
+    }
+    single {
         get<AllChatLocalRoomDatabase>().infoDao()
+    }
+    single {
+        get<AllChatLocalRoomDatabase>().messageDao()
+    }
+    single {
+        get<AllChatLocalRoomDatabase>().markerDao()
+    }
+    single {
+        get<AllChatLocalRoomDatabase>().conversationDao()
     }
 }
 
@@ -188,9 +228,6 @@ val useCaseModule = module {
         SendReadMarkerForMessageUseCase(get())
     }
     single {
-        SyncChatsUseCase(get())
-    }
-    single {
         SyncMessagesUseCase(get(), get())
     }
     single {
@@ -201,18 +238,6 @@ val useCaseModule = module {
     }
     single {
         GetConnectedUserUseCase(get())
-    }
-    single {
-        LoggedInUserUseCase(get())
-    }
-    single {
-        SignOut(get())
-    }
-    single {
-        SignIn(get())
-    }
-    single {
-        AuthenticationUseCases(get(), get(), get())
     }
 }
 

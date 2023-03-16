@@ -2,7 +2,6 @@ package com.hanialjti.allchat.di
 
 import com.hanialjti.allchat.data.remote.*
 import com.hanialjti.allchat.data.remote.xmpp.*
-import com.hanialjti.allchat.data.remote.xmpp.model.PingConfigurations
 import com.hanialjti.allchat.data.remote.xmpp.model.XmppConnectionConfig
 import org.jivesoftware.smack.ConnectionConfiguration
 import org.jivesoftware.smack.roster.Roster
@@ -10,17 +9,13 @@ import org.jivesoftware.smack.roster.rosterstore.DirectoryRosterStore
 import org.jivesoftware.smack.roster.rosterstore.RosterStore
 import org.jivesoftware.smack.tcp.XMPPTCPConnection
 import org.jivesoftware.smack.tcp.XMPPTCPConnectionConfiguration
-import org.jivesoftware.smackx.bookmarks.BookmarkManager
-import org.jivesoftware.smackx.ping.PingManager
-import com.hanialjti.allchat.data.remote.xmpp.ServerPingWithAlarmManager
 import org.jivesoftware.smackx.receipts.DeliveryReceiptManager
 import org.jivesoftware.smackx.vcardtemp.VCardManager
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.qualifier.named
 import org.koin.dsl.module
-import timber.log.Timber
 import java.io.File
-import java.util.UUID
+import java.util.*
 
 val xmppModule = module {
     single {
@@ -52,6 +47,13 @@ val xmppModule = module {
             rosterStore
         }
     }
+    single {
+        MucManager(
+            get(),
+            get(),
+            get(named(DispatcherQualifiers.Io))
+        )
+    }
 //    single {
 //        PingManager.getInstanceFor(get()).apply {
 //            val pingConfig = get<XmppConnectionConfig>().pingConfigurations
@@ -74,9 +76,6 @@ val xmppModule = module {
         }
     }
     single {
-        BookmarkManager.getBookmarkManager(get<XMPPTCPConnection>())
-    }
-    single {
         DeliveryReceiptManager.getInstanceFor(get<XMPPTCPConnection>()).apply {
             this.autoReceiptMode = DeliveryReceiptManager.AutoReceiptMode.always
             this.autoAddDeliveryReceiptRequests()
@@ -89,16 +88,19 @@ val xmppModule = module {
         XmppUserRemoteDataSource(get())
     }
     single<MessageRemoteDataSource> {
-        XmppRemoteDataSource(get())
+        XmppRemoteDataSource(get(), get())
     }
     single<ChatRemoteDataSource> {
-        ChatXmppDataSource(get(), get(), get())
+        ChatXmppDataSource(get(), get(),  get(named(DispatcherQualifiers.Io)), get(named(ScopeQualifiers.Application)), get())
     }
     single<UserRemoteDataSource> {
         XmppUserRemoteDataSource(get())
     }
     single<InfoRemoteDataSource> {
-        InfoXmppDataSource(get())
+        InfoXmppDataSource(get(), get())
+    }
+    single<XmppClientDataSource> {
+        XmppClientDataStore(androidContext())
     }
     single<ConnectionManager> {
         XmppConnectionManager(
@@ -107,6 +109,7 @@ val xmppModule = module {
             get(),
             get(qualifier = named(ScopeQualifiers.Application)),
             get(named(DispatcherQualifiers.Io)),
+            get(),
             get()
         )
     }

@@ -14,7 +14,8 @@ import com.google.accompanist.navigation.material.bottomSheet
 import com.hanialjti.allchat.presentation.chat.ChatScreen
 import com.hanialjti.allchat.presentation.component.CropImage
 import com.hanialjti.allchat.presentation.conversation.ConversationsScreen
-import com.hanialjti.allchat.presentation.create_chat_room.SelectInitialParticipantsScreen
+import com.hanialjti.allchat.presentation.create_chat_room.CreateChatRoomScreen
+import com.hanialjti.allchat.presentation.info.InfoScreen
 import com.hanialjti.allchat.presentation.invite_users.InviteUsersScreen
 import com.hanialjti.allchat.presentation.preview_attachment.MediaPreview
 import com.hanialjti.allchat.presentation.ui.screens.*
@@ -71,6 +72,7 @@ fun NavigationLayout(
                 CreateEntityScreen(navController = navController)
             }
 
+
             composable(
                 route = Screen.InviteUsersScreen.route,
                 arguments = listOf(
@@ -81,6 +83,18 @@ fun NavigationLayout(
                 chatRoomId?.let {
                     InviteUsersScreen(conversationId = chatRoomId, navController = navController)
                 } ?: throw IllegalArgumentException("Chat room id must not be null")
+            }
+
+            composable(
+                route = Screen.InfoScreen.route,
+                arguments = listOf(
+                    navArgument("id") { type = NavType.StringType }
+                )
+            ) {
+                val id = it.arguments?.getString("id")
+                id?.let {
+                    InfoScreen(id = id, navController = navController)
+                } ?: throw IllegalArgumentException("id must not be null")
             }
 
             val uri = "https://allchat.com"
@@ -112,7 +126,7 @@ fun NavigationLayout(
             ) {
 
                 composable(CreateChatRoomNavDirection.SelectInitialParticipants.route) {
-                    SelectInitialParticipantsScreen(navController = navController)
+                    CreateChatRoomScreen(navController = navController)
                 }
 
             }
@@ -172,6 +186,10 @@ fun NavController.toConversationsScreen() = navigate(
     navOptions {
         popUpTo(Screen.SignIn.route) { inclusive = true }
     }
+)
+
+fun NavController.toInfoScreen(id: String) = navigate(
+    Screen.InfoScreen.route.replace("{id}", id)
 )
 
 fun NavController.toSignInScreen() = navigate(

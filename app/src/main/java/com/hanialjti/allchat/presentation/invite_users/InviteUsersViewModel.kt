@@ -26,7 +26,7 @@ class InviteUsersViewModel(
                 .collectLatest { userList ->
                     _uiState.update {
                         it.copy(
-                            allUsers = userList
+                            allUsers = userList.toSet()
                         )
                     }
                 }
@@ -43,7 +43,7 @@ class InviteUsersViewModel(
     fun addUserToInvitedList(user: User) {
         viewModelScope.launch {
             _uiState.update {
-                val updatedList = it.selectedUsers.toMutableList().apply { add(user) }
+                val updatedList = it.selectedUsers.toMutableSet().apply { add(user) }
                 it.copy(
                     selectedUsers = updatedList
                 )
@@ -54,7 +54,7 @@ class InviteUsersViewModel(
     fun removeUserFromInvitedList(user: User) {
         viewModelScope.launch {
             _uiState.update {
-                val updatedList = it.selectedUsers.toMutableList().apply { remove(user) }
+                val updatedList = it.selectedUsers.toMutableSet().apply { remove(user) }
                 it.copy(
                     selectedUsers = updatedList
                 )
@@ -64,8 +64,8 @@ class InviteUsersViewModel(
 }
 
 data class InviteUsersUiState(
-    val allUsers: List<User> = listOf(),
-    val selectedUsers: List<User> = listOf(),
+    val allUsers: Set<User> = setOf(),
+    val selectedUsers: Set<User> = setOf(),
     val isUsersInvited: Boolean = false,
     val message: String? = null,
     val isLoading: Boolean = false

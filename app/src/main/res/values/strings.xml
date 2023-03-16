@@ -37,4 +37,7 @@
     <string name="last_month">Last Month</string>
     <string name="last_year">Last Year</string>
     <string name="other_date_pattern">dd/MM/yyyy</string>
+
+    //Errors
+    <string name="invalid_credentials">Invalid username or password</string>
 </resources>

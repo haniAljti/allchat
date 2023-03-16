@@ -19,6 +19,8 @@ data class UserCredentials(
 data class ClientPreferences(
     val enableChatMarkers: Boolean = true,
     val enableChatStateNotifications: Boolean = true,
+    val enablePresenceSending: Boolean = true,
+    val sendPresenceOnLogin: Boolean = enablePresenceSending
 )
 
 @Serializable

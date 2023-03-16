@@ -20,3 +20,7 @@ sealed interface PingConfigurations {
     object DisablePingMessages: PingConfigurations
     class EnablePingMessages(val intervalInSeconds: Int): PingConfigurations
 }
+
+enum class MucAvatarConfig {
+    SaveToVCard, SaveToPubSubNode, SendAsMessage
+}

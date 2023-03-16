@@ -76,6 +76,12 @@ class Converters {
     fun roleListFromString(list: String): List<Role> = Json.decodeFromString(list)
 
     @TypeConverter
+    fun messageMarkerMapToString(markers: Map<String, MessageMarker>) = Json.encodeToString(markers)
+
+    @TypeConverter
+    fun messageMarkerMapFromString(markersMap: String): Map<String, MessageMarker> = Json.decodeFromString(markersMap)
+
+    @TypeConverter
     fun fromStatus(status: MessageStatus?) = status?.value
 
     @TypeConverter

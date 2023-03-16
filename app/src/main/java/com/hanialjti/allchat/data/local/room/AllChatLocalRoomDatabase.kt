@@ -18,12 +18,22 @@ import com.hanialjti.allchat.data.local.room.entity.*
     version = 1
 )
 @TypeConverters(Converters::class)
-abstract class AllChatLocalRoomDatabase : RoomDatabase() {
-    abstract fun userDao(): UserDao
-    abstract fun conversationDao(): ConversationDao
-    abstract fun messageDao(): MessageDao
-    abstract fun markerDao(): MessageMarkerDao
-    abstract fun participantDao(): ParticipantDao
-    abstract fun infoDao(): InfoDao
-    abstract fun blockedUserDao(): BlockedUserDao
+abstract class AllChatLocalRoomDatabase : RoomDatabase(), LocalDataStore {
+    abstract override fun userDao(): UserDao
+    abstract override fun conversationDao(): ConversationDao
+    abstract override fun messageDao(): MessageDao
+    abstract override fun markerDao(): MessageMarkerDao
+    abstract override fun participantDao(): ParticipantDao
+    abstract override fun infoDao(): InfoDao
+    abstract override fun blockedUserDao(): BlockedUserDao
+}
+
+interface LocalDataStore {
+    fun userDao(): UserDao
+    fun conversationDao(): ConversationDao
+    fun messageDao(): MessageDao
+    fun markerDao(): MessageMarkerDao
+    fun participantDao(): ParticipantDao
+    fun infoDao(): InfoDao
+    fun blockedUserDao(): BlockedUserDao
 }

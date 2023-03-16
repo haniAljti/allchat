@@ -3,10 +3,13 @@ package com.hanialjti.allchat.data.local.room.dao
 import androidx.paging.PagingSource
 import androidx.room.*
 import androidx.room.OnConflictStrategy.Companion.REPLACE
+import com.hanialjti.allchat.common.utils.FileUtils
 import com.hanialjti.allchat.data.local.room.entity.MessageEntity
 import com.hanialjti.allchat.data.local.room.entity.hasLesserValueThan
 import com.hanialjti.allchat.data.model.Attachment
 import com.hanialjti.allchat.data.model.MessageStatus
+import com.hanialjti.allchat.data.remote.model.Location
+import com.hanialjti.allchat.data.remote.model.Media
 import kotlinx.coroutines.flow.Flow
 import java.time.OffsetDateTime
 
@@ -14,7 +17,10 @@ import java.time.OffsetDateTime
 interface MessageDao {
 
     @Query("SELECT * FROM messages WHERE contact_id = :conversation AND owner_id = :owner ORDER BY timestamp DESC")
-    fun getMessagesByConversation(conversation: String?, owner: String?): PagingSource<Int, MessageEntity>
+    fun getMessagesByConversation(
+        conversation: String?,
+        owner: String?
+    ): PagingSource<Int, MessageEntity>
 
     @Delete
     suspend fun deleteOne(message: MessageEntity)
@@ -26,6 +32,17 @@ interface MessageDao {
                 "AND sender_id = owner_id " +
                 "AND owner_id = :owner " +
                 "AND status >= 3 AND status < :messageStatus"
+//                +
+//    """
+//        UPDATE messages
+//        SET status = max(mr.marker)
+//        FROM messages m, markers mr, participants p
+//        WHERE m.status >= 3 AND m.status < 5
+//        AND m.id = mr.message_id
+//        AND m.contact_id = p.chat_id
+//        GROUP BY mr.marker
+//        HAVING COUNT(*) = (SELECT COUNT(*) FROM participants WHERE chat_id = :chatId)
+//    """
     )
     suspend fun updateStatusForMessagesBeforeTimestamp(
         messageStatus: MessageStatus,
@@ -74,6 +91,8 @@ interface MessageDao {
     suspend fun upsertMessage(message: MessageEntity) {
         val existingMessage = getMessageByRemoteId(message.id)
 
+        val attachment = existingMessage?.attachment ?: message.attachment
+
         if (existingMessage == null) {
             insertOrReplace(message)
         } else {
@@ -85,8 +104,13 @@ interface MessageDao {
                 existingMessage.copy(
                     status = status,
                     archiveId = message.archiveId,
-                    attachment = message.attachment,
-                    thread = message.thread
+                    attachment = attachment,
+                    thread = message.thread ?: existingMessage.thread,
+                    markers = existingMessage.markers.toMutableMap().apply {
+                        message.markers.forEach { (user, marker) ->
+                            this[user] = marker
+                        }
+                    }
                 )
             )
 

@@ -14,6 +14,8 @@ sealed class Screen(val route: String, val title: String, @DrawableRes val iconR
     object AddChatEntityScreen : Screen("addEntity", "Add Entry", null)
     object CreateChatRoomScreens : Screen("createChatRoom", "Create Chat Room", null)
     object CropImage : Screen("cropper", "Crop Image", null)
+
+    object InfoScreen : Screen("info/{id}", "Info", null)
 }
 
 sealed class CreateChatRoomNavDirection(route: String, title: String, @DrawableRes iconRes: Int?) : Screen(route, title, iconRes) {

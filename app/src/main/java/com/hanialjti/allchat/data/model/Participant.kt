@@ -2,11 +2,9 @@ package com.hanialjti.allchat.data.model
 
 
 data class Participant(
-    val id: String,
-    val name: String,
-    val image: String,
+    val user: User,
     val state: State,
-    val roles: Role
+    val role: Role
 ) {
     enum class State {
         Active,

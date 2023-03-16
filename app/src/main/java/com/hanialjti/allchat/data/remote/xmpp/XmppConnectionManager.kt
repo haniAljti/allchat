@@ -7,7 +7,9 @@ import com.hanialjti.allchat.common.utils.Logger
 import com.hanialjti.allchat.data.local.datastore.UserCredentials
 import com.hanialjti.allchat.data.local.datastore.PreferencesLocalDataStore
 import com.hanialjti.allchat.data.remote.ConnectionManager
+import com.hanialjti.allchat.data.remote.InvalidUsernameOrPassword
 import com.hanialjti.allchat.data.remote.delayRetry
+import com.hanialjti.allchat.data.remote.model.CallResult
 import com.hanialjti.allchat.data.remote.model.Presence
 import com.hanialjti.allchat.data.remote.xmpp.model.*
 import kotlinx.coroutines.CoroutineDispatcher
@@ -22,6 +24,7 @@ import org.jivesoftware.smack.SmackException
 import org.jivesoftware.smack.XMPPConnection
 import org.jivesoftware.smack.XMPPException.XMPPErrorException
 import org.jivesoftware.smack.provider.ProviderManager
+import org.jivesoftware.smack.sasl.SASLErrorException
 import org.jivesoftware.smack.tcp.XMPPTCPConnection
 import org.jivesoftware.smackx.bookmarks.BookmarkManager
 import org.jivesoftware.smackx.caps.EntityCapsManager
@@ -41,11 +44,13 @@ class XmppConnectionManager(
     private val preferencesLocalDataStore: PreferencesLocalDataStore,
     private val externalScope: CoroutineScope,
     private val dispatcher: CoroutineDispatcher,
-    private val config: XmppConnectionConfig
+    private val config: XmppConnectionConfig,
+    private val xmppClientDataSource: XmppClientDataSource
 ) : ConnectionManager, ConnectionListener {
 
     private val workers: MutableSet<ListenableWorker> = mutableSetOf()
     private var connectRequested: Boolean = false
+    private var sendPresence: Boolean = false
 
     private val reconnectionManager = ReconnectionManager.getInstanceFor(connection)
     private val carbonManager = CarbonManager.getInstanceFor(connection)
@@ -58,6 +63,8 @@ class XmppConnectionManager(
     private val serverPingWithAlarmManager = ServerPingWithAlarmManager.getInstanceFor(connection)
 
     init {
+        Logger.d { "Registering connection listener" }
+        connection.addConnectionListener(this)
         ProviderManager.addExtensionProvider(
             OutOfBandData.ELEMENT,
             OutOfBandData.NAMESPACE,
@@ -73,13 +80,26 @@ class XmppConnectionManager(
             AvatarMetaDataExtensionElement.NAMESPACE,
             AvatarMetaDataExtensionProvider()
         )
-        if (config.chatMarkersEnabled) {
-            serviceDiscoveryManager.addFeature(ChatMarkersElements.NAMESPACE)
+        ProviderManager.addExtensionProvider(
+            MucBookmark.ELEMENT,
+            MucBookmark.NAMESPACE,
+            MucBookmarkExtensionProvider()
+        )
+        externalScope.launch {
+            preferencesLocalDataStore.clientPreferences.collectLatest { clientPrefs ->
+                if (clientPrefs.enableChatMarkers) {
+                    serviceDiscoveryManager.addFeature(ChatMarkersElements.NAMESPACE)
+                } else {
+                    serviceDiscoveryManager.removeFeature(ChatMarkersElements.NAMESPACE)
+                }
+            }
         }
         serviceDiscoveryManager.addFeature(Nick.NAMESPACE)
-        serviceDiscoveryManager.addFeature(AvatarMetaDataExtensionElement.NAMESPACE)
         serviceDiscoveryManager.addFeature(Nick.NAMESPACE.plus("+notify"))
+        serviceDiscoveryManager.addFeature(AvatarMetaDataExtensionElement.NAMESPACE)
         serviceDiscoveryManager.addFeature(AvatarMetaDataExtensionElement.NAMESPACE.plus("+notify"))
+        serviceDiscoveryManager.addFeature(MucBookmark.NAMESPACE)
+        serviceDiscoveryManager.addFeature(MucBookmark.NAMESPACE.plus("+notify"))
         EntityCapsManager.setPersistentCache(entityCapsPersistentCache)
         serverPingWithAlarmManager.isEnabled = true
     }
@@ -89,6 +109,9 @@ class XmppConnectionManager(
     override val clientId get() = connection.user?.resourceOrNull?.toString()
 
     override fun getConfig() = config
+    override fun updateSendPresences(sendPresence: Boolean) {
+        this.sendPresence = sendPresence
+    }
 
     override val loggedInUser = observeConnectivityStatus()
         .map { connectionStatus ->
@@ -153,7 +176,8 @@ class XmppConnectionManager(
 //            )
             .setStatus(presence.status)
             .setMode(
-                if (presence.type == Presence.Type.Available) org.jivesoftware.smack.packet.Presence.Mode.available
+                if (presence.type == Presence.Type.Available)
+                    org.jivesoftware.smack.packet.Presence.Mode.available
                 else org.jivesoftware.smack.packet.Presence.Mode.away
             )
             .build()
@@ -169,11 +193,9 @@ class XmppConnectionManager(
     }
 
     override suspend fun onResume() {
-        Logger.d { "signing in..." }
+        Logger.d { "OnResume called" }
         connectRequested = true
-        preferencesLocalDataStore.userCredentials.first()?.let { connect(it) }
         connection.addConnectionListener(this)
-        updateMyPresence(Presence(Presence.Type.Available, null))
         if (config.useForegroundService && ClientStateIndicationManager.isSupported(connection)) {
             try {
                 ClientStateIndicationManager.active(connection)
@@ -193,11 +215,11 @@ class XmppConnectionManager(
                 Logger.e(e)
             }
         }
-//        entityCapsManager.disableEntityCaps()
         reconnectionManager.disableAutomaticReconnection()
         connection.removeConnectionListener(this)
-        updateMyPresence(Presence(Presence.Type.Unavailable, null))
-
+        if (this.sendPresence && connection.isAuthenticated) {
+            updateMyPresence(Presence(Presence.Type.Unavailable, null))
+        }
     }
 
     override suspend fun unregisterWorker(worker: ListenableWorker): Unit =
@@ -231,18 +253,38 @@ class XmppConnectionManager(
 
     }.distinctUntilChanged()
 
-    private suspend fun login(userCredentials: UserCredentials) = withContext(dispatcher) {
+    override suspend fun login(userCredentials: UserCredentials) = withContext(dispatcher) {
         if (!connection.isAuthenticated) {
-            if (userCredentials.username != null && userCredentials.password != null) {
-                connection
-                    .connect()
-                    .login(
-                        userCredentials.username,
-                        userCredentials.password
+            if (!userCredentials.username.isNullOrBlank() && !userCredentials.password.isNullOrBlank()) {
+                return@withContext try {
+                    connection.apply {
+                        if (!isConnected) {
+                            connect()
+                        }
+                        login(
+                            userCredentials.username,
+                            userCredentials.password
+                        )
+                    }
+                    if (carbonManager.isSupportedByServer) {
+                        carbonManager.enableCarbons()
+                    }
+                    reconnectionManager.setReconnectionPolicy(ReconnectionManager.ReconnectionPolicy.FIXED_DELAY)
+                    reconnectionManager.enableAutomaticReconnection()
+                    CallResult.Success()
+                } catch (e: SmackException) {
+                    Logger.e(e) { "Authentication error" }
+                    CallResult.Error("Authentication error", e)
+                } catch (e: SASLErrorException) {
+                    Logger.e(e) { "Invalid username or password" }
+                    CallResult.Error(
+                        "Invalid username or password",
+                        InvalidUsernameOrPassword(null, e)
                     )
-                carbonManager.enableCarbons()
-            } else throw NotAuthenticatedException("Credentials are null", null)
+                }
+            } else return@withContext CallResult.Error("Credentials are null")
         }
+        return@withContext CallResult.Success()
     }
 
     private suspend fun disconnectIfPossible() = withContext(dispatcher) {
@@ -255,23 +297,40 @@ class XmppConnectionManager(
         }
     }
 
-    override suspend fun connect(userCredentials: UserCredentials) {
+    override suspend fun connectAndDelayRetry(
+        userCredentials: UserCredentials,
+        maxRetryCount: Int
+    ) {
         delayRetry(
             func = { login(userCredentials) },
-            breakWhen = { !connectRequested },
+            breakWhen = { false },
             onError = { Timber.e(it) },
-            maxRetryCount = Int.MAX_VALUE,
+            maxRetryCount = maxRetryCount,
         )
-        reconnectionManager.setReconnectionPolicy(ReconnectionManager.ReconnectionPolicy.FIXED_DELAY)
-        reconnectionManager.enableAutomaticReconnection()
     }
 
     override suspend fun disconnect() {
         disconnectIfPossible()
     }
 
+    override fun connectionClosed() {
+        Logger.d { "Connection is closed" }
+        externalScope.launch { xmppClientDataSource.updateIsAuthenticated(false) }
+    }
+
+    override fun connectionClosedOnError(e: java.lang.Exception?) {
+        Logger.d { "Connection is closed" }
+        externalScope.launch { xmppClientDataSource.updateIsAuthenticated(false) }
+    }
     override fun authenticated(connection: XMPPConnection?, resumed: Boolean) {
+        Logger.d { "Connection is authenticated!" }
+        externalScope.launch { xmppClientDataSource.updateIsAuthenticated(true) }
         externalScope.launch { joinAllChatRooms() }
+        externalScope.launch {
+            if (sendPresence) {
+                updateMyPresence(Presence(Presence.Type.Available, null))
+            }
+        }
     }
 
 }

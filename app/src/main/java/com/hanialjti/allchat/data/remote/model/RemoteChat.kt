@@ -4,7 +4,7 @@ import com.hanialjti.allchat.data.model.Avatar
 
 data class RemoteChat(
     val id: String,
-    val name: String?,
-    val avatar: Avatar? = null,
+//    val name: String?,
+//    val avatar: Avatar? = null,
     val isGroupChat: Boolean
 )

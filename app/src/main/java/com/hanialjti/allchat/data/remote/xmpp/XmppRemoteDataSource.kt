@@ -5,7 +5,10 @@ import com.hanialjti.allchat.data.model.Marker
 import com.hanialjti.allchat.data.model.MessageStatus
 import com.hanialjti.allchat.data.model.MessageType
 import com.hanialjti.allchat.data.remote.MessageRemoteDataSource
-import com.hanialjti.allchat.data.remote.model.*
+import com.hanialjti.allchat.data.remote.model.CallResult
+import com.hanialjti.allchat.data.remote.model.MessagePage
+import com.hanialjti.allchat.data.remote.model.RemoteMessage
+import com.hanialjti.allchat.data.remote.model.RemoteMessageItem
 import com.hanialjti.allchat.data.remote.xmpp.model.ChatMarkerWrapper.Companion.toMarker
 import com.hanialjti.allchat.data.remote.xmpp.model.ChatMarkerWrapper.Companion.toMessageStatus
 import com.hanialjti.allchat.data.remote.xmpp.model.OutOfBandData
@@ -39,11 +42,9 @@ import org.jivesoftware.smackx.geoloc.packet.GeoLocation
 import org.jivesoftware.smackx.hints.element.NoStoreHint
 import org.jivesoftware.smackx.hints.element.StoreHint
 import org.jivesoftware.smackx.mam.MamManager
-import org.jivesoftware.smackx.muc.MultiUserChatManager
 import org.jivesoftware.smackx.receipts.DeliveryReceiptManager
 import org.jivesoftware.smackx.receipts.ReceiptReceivedListener
 import org.jxmpp.jid.impl.JidCreate
-import org.jxmpp.jid.parts.Resourcepart
 import timber.log.Timber
 import java.time.Instant
 import java.time.ZoneOffset
@@ -51,6 +52,7 @@ import java.time.ZoneOffset
 
 class XmppRemoteDataSource(
     private val connection: XMPPTCPConnection,
+    private val localMucManager: MucManager,
     private val dispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : MessageRemoteDataSource {
 
@@ -59,7 +61,6 @@ class XmppRemoteDataSource(
     private val chatMarkersManager = ChatMarkersManager.getInstanceFor(connection)
     private val carbonManager = CarbonManager.getInstanceFor(connection)
     private val receiptManager = DeliveryReceiptManager.getInstanceFor(connection)
-    private val mucManager = MultiUserChatManager.getInstanceFor(connection)
     private val serviceDiscoveryManager = ServiceDiscoveryManager.getInstanceFor(connection)
 
     private val messagesWaitingForAcknowledgment: MutableList<String> = mutableListOf()
@@ -137,7 +138,7 @@ class XmppRemoteDataSource(
                                 type = MessageType.Chat, // since group chat messages should not be carbon copied
                                 sender = sender,
                                 thread = carbonCopy.thread,
-                                sentTo = carbonCopy.to.resourceOrNull.toString(),
+                                sentTo = carbonCopy.to?.resourceOrNull?.toString(),
                                 attachment = carbonCopy.extractAttachment(),
                                 messageStatus = if (direction == CarbonExtension.Direction.sent) MessageStatus.Sent else MessageStatus.Delivered,
                                 markers = if (chatMarker != null && sender != null) mapOf(sender to chatMarker.toMarker()) else mapOf()
@@ -152,23 +153,6 @@ class XmppRemoteDataSource(
 
         awaitClose {
             carbonManager.removeCarbonCopyReceivedListener(carbonListener)
-        }
-    }
-
-    private fun Message.extractAttachment(): RemoteAttachment? {
-        val mediaAttachment = getExtension(OutOfBandData.NAMESPACE) as? OutOfBandData
-        val locationAttachment = getExtension(GeoLocation.NAMESPACE) as? GeoLocation
-
-        return when {
-            mediaAttachment != null -> Media(
-                url = mediaAttachment.url,
-                desc = mediaAttachment.desc
-            )
-            locationAttachment != null -> Location(
-                lat = locationAttachment.lat,
-                lng = locationAttachment.lon
-            )
-            else -> null
         }
     }
 
@@ -350,7 +334,7 @@ class XmppRemoteDataSource(
         observeChatMarkers(),
         observeAcknowledgmentMessages(),
         observeCarbonCopiedMessages(),
-        observeNewGroupMessages(),
+        localMucManager.mucMessagesStream(),
         observeDeliveryReceipts()
     )
 
@@ -371,8 +355,8 @@ class XmppRemoteDataSource(
                             id = chatMarker?.stanzaId ?: stanza.stanzaId,
                             body = if (stanza.isMessage()) stanza.body else null,
                             chatId = stanza.fromAsString(),
-                            sender = stanza.from.resourceOrNull.toString().asJid().asBareJid()
-                                .toString(),
+                            sender = stanza.from.resourceOrNull?.toString()?.asJid()?.asBareJid()
+                                ?.toString(),
                             attachment = stanza.extractAttachment(),
                             type = MessageType.GroupChat,
                             thread = stanza.thread,
@@ -457,9 +441,8 @@ class XmppRemoteDataSource(
             .apply {
                 if (thread != null) setThread(thread)
                 if (isMarkable && serviceDiscoveryManager.supportsFeature(
-                        JidCreate.bareFrom(
-                            message.contactId
-                        ), ChatMarkersElements.NAMESPACE
+                        JidCreate.bareFrom(message.contactId),
+                        ChatMarkersElements.NAMESPACE
                     )
                 ) {
                     addExtension(ChatMarkersElements.MarkableExtension.INSTANCE)
@@ -506,14 +489,9 @@ class XmppRemoteDataSource(
     private suspend fun sendMessage(stanzaMessage: Message, to: String, isGroupChat: Boolean) =
         try {
             if (!isGroupChat) {
-                chatManager.chatWith(to.asJid().asEntityBareJidIfPossible())
-                    .send(stanzaMessage)
+                chatManager.chatWith(to.asJid().asEntityBareJidIfPossible()).send(stanzaMessage)
             } else {
-                val sent = sendMessageToRoom(
-                    to,
-                    stanzaMessage
-                )
-
+                val sent = localMucManager.sendMessageToRoom(to, stanzaMessage)
                 if (!sent) CallResult.Error("Error while sending group chat message")
             }
             CallResult.Success(stanzaMessage.stanzaId)
@@ -521,36 +499,6 @@ class XmppRemoteDataSource(
             Timber.e(e)
             CallResult.Error("An error occurred while sending message!", e)
         }
-
-
-    private suspend fun sendMessageToRoom(
-        chatRoom: String,
-        stanza: Message
-    ): Boolean {
-        return try {
-            if (!mucManager.getMultiUserChat(
-                    chatRoom.asJid().asEntityBareJidIfPossible()
-                ).isJoined
-            ) {
-                connection.user.toString().let { joinRoom(chatRoom, it) }
-            }
-            mucManager.getMultiUserChat(chatRoom.asJid().asEntityBareJidIfPossible())
-                .sendMessage(stanza.asBuilder())
-            true
-        } catch (e: Exception) {
-            Timber.e(e)
-            false
-        }
-    }
-
-    private suspend fun joinRoom(roomId: String, myId: String) {
-        val muc = mucManager.getMultiUserChat(roomId.asJid().asEntityBareJidIfPossible())
-        if (!muc.isJoined) {
-            val history = muc.getEnterConfigurationBuilder(Resourcepart.from(myId))
-                .requestHistorySince(534776876).build()
-            muc.join(history)
-        }
-    }
 
 
 }

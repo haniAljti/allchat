@@ -5,7 +5,7 @@ import com.hanialjti.allchat.presentation.conversation.ContactImage
 import kotlinx.datetime.LocalDateTime
 import kotlinx.serialization.Serializable
 
-data class Contact(
+data class ContactWithLastMessage(
     val id: String? = null,
     val lastMessage: MessageSummary? = null,
     val isGroupChat: Boolean = false,

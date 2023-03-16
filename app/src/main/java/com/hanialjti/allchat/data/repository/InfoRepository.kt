@@ -5,6 +5,8 @@ import com.hanialjti.allchat.data.local.room.entity.InfoEntity
 import com.hanialjti.allchat.data.model.Avatar
 import com.hanialjti.allchat.data.remote.InfoRemoteDataSource
 import com.hanialjti.allchat.data.remote.model.CallResult
+import com.hanialjti.allchat.data.remote.model.NicknameUpdate
+import kotlinx.coroutines.flow.onEach
 
 class InfoRepository(
     private val infoDao: InfoDao,
@@ -12,8 +14,8 @@ class InfoRepository(
     private val fileRepository: FileRepository
 ) {
 
-    suspend fun fetchAndSaveEntityInfo(id: String): InfoEntity? {
-        val infoResult = infoRemoteDataSource.getUpdatedEntityInfo(id)
+    suspend fun fetchAndSaveInfo(id: String, isGroupChat: Boolean): InfoEntity? {
+        val infoResult = infoRemoteDataSource.getUpdatedEntityInfo(id, isGroupChat)
         if (infoResult is CallResult.Error) {
             return null
         }
@@ -39,10 +41,34 @@ class InfoRepository(
                 avatarHash = if (avatar is Avatar.Raw) infoRemoteDataSource.hashAvatarBytes(avatar.bytes) else null,
                 nickname = it
             )
-            infoDao.insertAvatar(infoEntity)
+            infoDao.insert(infoEntity)
             infoEntity
         }
     }
+
+    suspend fun nicknameStream() = infoRemoteDataSource.infoUpdateStream()
+        .onEach { info ->
+            when (info) {
+                is NicknameUpdate -> {
+                    if (infoDao.getOne(info.entityId) == null) {
+                        infoDao.insert(
+                            InfoEntity(
+                                id = info.entityId,
+                                nickname = info.nickname,
+                                cachePath = null,
+                                avatarHash = null
+                            )
+                        )
+                    } else {
+                        infoDao.updateNickname(info.nickname, info.entityId)
+                    }
+                }
+                else -> {}
+            }
+        }
+
+    suspend fun fetchUserNickname(userId: String) =
+        infoRemoteDataSource.fetchNickname(userId, false)
 
     suspend fun getInfoFor(id: String): InfoEntity? = infoDao.getOne(id)
 }

@@ -3,12 +3,10 @@ package com.hanialjti.allchat.data.tasks
 import android.app.*
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
 import android.os.Build
 import android.os.IBinder
 import androidx.annotation.RequiresApi
 import androidx.core.net.toUri
-import com.google.modernstorage.storage.toUri
 import com.hanialjti.allchat.R
 import com.hanialjti.allchat.common.utils.ApplicationUtils
 import com.hanialjti.allchat.common.utils.Logger
@@ -18,10 +16,8 @@ import com.hanialjti.allchat.data.repository.IMessageRepository
 import com.hanialjti.allchat.data.repository.InfoRepository
 import com.hanialjti.allchat.di.AllChat
 import com.hanialjti.allchat.presentation.MainActivity
-import com.hanialjti.allchat.presentation.conversation.ContactImage
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.filter
-import okio.Path.Companion.toOkioPath
 import org.jivesoftware.smack.tcp.XMPPTCPConnection
 import java.io.File
 
@@ -85,7 +81,7 @@ class ChatForegroundService: Service() {
         val pendingIntent: PendingIntent =
             Intent(this, MainActivity::class.java).let { notificationIntent ->
                 PendingIntent.getActivity(this, 0, notificationIntent,
-                    PendingIntent.FLAG_IMMUTABLE)
+                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
             }
 
         val notification: Notification = Notification.Builder(this, CHANNEL_ID)

@@ -77,7 +77,6 @@ sealed class UiText {
         vararg val args: Any
     ) : UiText()
 
-    @OptIn(ExperimentalComposeUiApi::class)
     @Composable
     fun asString(): String {
         return when (this) {

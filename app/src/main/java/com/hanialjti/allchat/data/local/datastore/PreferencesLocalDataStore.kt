@@ -30,8 +30,11 @@ class PreferencesLocalDataStore(
 
     suspend fun username() = usernameStream.first()
 
-    suspend fun updateUserCredentials(userCredentials: UserCredentials) = context.dataStore
+    suspend fun updateUserCredentials(userCredentials: UserCredentials?) = context.dataStore
         .updateData { it.copy(userCredentials = userCredentials) }
+
+    suspend fun updateClientPreferences(clientPreferences: ClientPreferences) = context.dataStore
+        .updateData { it.copy(clientPreferences = clientPreferences) }
 
     suspend fun updateLoggedInUser(user: String?) = context.dataStore
         .updateData { it.copy(loggedInUser = user) }

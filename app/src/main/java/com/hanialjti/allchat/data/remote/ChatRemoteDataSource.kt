@@ -10,20 +10,20 @@ import kotlinx.coroutines.flow.SharedFlow
 
 interface ChatRemoteDataSource {
 
-    val chatChanges: SharedFlow<ListChange<RemoteChat>>
     suspend fun updateMyChatState(chatState: ChatState)
 
-    fun listenForChatUpdates(): Flow<List<ChatUpdate>>
+    fun chatUpdatesStream(): Flow<ChatUpdate>
 
     suspend fun createChatRoom(
         roomName: String,
-        myId: String
+        myId: String,
+        invitees: Set<String>
     ): CallResult<String>
     suspend fun inviteUserToChatRoom(userId: String, conversationId: String, myId: String): CallResult<String>
-    suspend fun retrieveContacts(): List<RemoteChat>
+    suspend fun retrieveGroupChats(): List<String>
     // TODO: Start the conversation via a worker
-    suspend fun addUserToContact(userId: String, userName: String): CallResult<String>
-    suspend fun emitChatChange(change: ListChange<RemoteChat>)
-    fun startListeners()
-    fun stopListeners()
+    suspend fun addUserToContact(userId: String): CallResult<String>
+//    suspend fun emitChatChange(change: ListChange<RemoteChat>)
+//    fun startListeners()
+//    fun stopListeners()
 }

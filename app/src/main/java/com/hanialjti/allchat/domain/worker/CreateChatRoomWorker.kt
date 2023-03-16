@@ -10,15 +10,14 @@ import androidx.work.ForegroundInfo
 import androidx.work.WorkerParameters
 import com.hanialjti.allchat.R
 import com.hanialjti.allchat.data.remote.model.CallResult
-import com.hanialjti.allchat.data.remote.ConnectionManager
-import com.hanialjti.allchat.data.remote.registerWorker
+import com.hanialjti.allchat.data.repository.AuthenticationRepository
 import com.hanialjti.allchat.data.repository.ConversationRepository
 
 class CreateChatRoomWorker(
     context: Context,
     private val parameters: WorkerParameters,
     private val conversationRepository: ConversationRepository,
-    private val connectionManager: ConnectionManager
+    private val authenticationRepository: AuthenticationRepository
 ) : CoroutineWorker(
     context,
     parameters
@@ -26,19 +25,18 @@ class CreateChatRoomWorker(
     override suspend fun doWork(): Result {
         val chatRoomId = parameters.inputData.getString(CONTACT_ID_KEY) ?: return Result.failure()
 
-        val chatRoomResult = connectionManager.registerWorker(this) {
-           conversationRepository.createChatRoom(chatRoomId)
-        }
+        authenticationRepository.connectAndDelayRetry(1)
 
-        return when (chatRoomResult) {
-            is CallResult.Success -> {
-                Result.success()
-            }
-            else -> {
-                Result.retry()
-            }
-        }
+//        return when (conversationRepository.createChatRoom(chatRoomId)) {
+//            is CallResult.Success -> {
+//                Result.success()
+//            }
+//            else -> {
+//                Result.retry()
+//            }
+//        }
 
+        return Result.failure()
     }
 
     companion object {

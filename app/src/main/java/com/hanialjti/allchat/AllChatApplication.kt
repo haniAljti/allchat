@@ -19,17 +19,13 @@ class AllChatApplication: Application() {
             this,
             ConnectionType.Xmpp(
                 XmppConnectionConfig(
-                    host = "192.168.0.42",
+//                    host = "192.168.0.42",
+                    host = "192.168.1.147",
                     domain = "hanis-laptop",
-                    port = 5222,
-//                    pingConfigurations = PingConfigurations.EnablePingMessages(15)
+                    port = 5222
                 )
             )
         )
-
-
-
-        AndroidSmackInitializer.initialize(this)
 
         if (Timber.forest().isEmpty()) {
             plant(DebugTree())

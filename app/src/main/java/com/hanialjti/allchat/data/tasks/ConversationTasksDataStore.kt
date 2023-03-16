@@ -6,7 +6,8 @@ class ConversationTasksDataStore(
     private val workManager: WorkManager
 ) {
 
-    fun createChatRoom(chatRoomLocalId: Int) {
+    fun createChatRoom() {
 
     }
+
 }

@@ -23,6 +23,7 @@ interface ConversationDao {
                c.owner                                                       as chat_owner,
                c.is_group_chat                                               as chat_is_group_chat,
                c.unread_messages_count                                       as chat_unread_messages_count,
+               c.participants                                                as chat_participants,
                u.is_online                                                   as user_is_online,
                u.id                                                          as user_id,
                a.nickname                                                    as nickname,
@@ -53,6 +54,7 @@ interface ConversationDao {
          c.owner as chat_owner,
          c.is_group_chat as chat_is_group_chat,
          c.unread_messages_count as chat_unread_messages_count,
+         c.participants as chat_participants,
          u.is_online as user_is_online,
          u.id as user_id,
          a.nickname as nickname,
@@ -71,14 +73,8 @@ interface ConversationDao {
     @Query("SELECT * FROM chats WHERE id = :remoteId")
     suspend fun getConversationByRemoteId(remoteId: String?): ChatEntity?
 
-    @Query("UPDATE chats SET lastMessage = :lastMessageSummary WHERE id = :chatId")
-    suspend fun updateLastMessage(lastMessageSummary: MessageSummary, chatId: String)
-
-    @Query("UPDATE chats SET name = :name WHERE id = :chatId")
-    suspend fun updateName(name: String, chatId: String)
-
-    @Query("UPDATE chats SET avatar = :avatar WHERE id = :chatId")
-    suspend fun updateAvatar(avatar: String, chatId: String)
+    @Query("SELECT * FROM chats WHERE id = :chatId AND owner = :owner")
+    suspend fun getOne(chatId: String, owner: String): ChatEntity?
 
     @Query("UPDATE chats SET unread_messages_count = 0 WHERE id = :conversationId")
     suspend fun resetUnreadCounter(conversationId: String)
@@ -86,7 +82,7 @@ interface ConversationDao {
     @Query("SELECT * FROM chats WHERE id = :id")
     fun getFlowById(id: String): Flow<ChatEntity>
 
-    @Insert(onConflict = IGNORE)
+    @Insert(onConflict = REPLACE)
     suspend fun insert(vararg conversationEntity: ChatEntity): List<Long>
 
     @Update(onConflict = REPLACE)

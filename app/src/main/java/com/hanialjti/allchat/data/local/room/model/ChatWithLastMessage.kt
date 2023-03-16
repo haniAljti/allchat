@@ -5,7 +5,7 @@ import androidx.room.Embedded
 import com.hanialjti.allchat.data.local.room.entity.ChatEntity
 import com.hanialjti.allchat.data.local.room.entity.UserEntity
 import com.hanialjti.allchat.data.model.Attachment
-import com.hanialjti.allchat.data.model.Contact
+import com.hanialjti.allchat.data.model.ContactWithLastMessage
 import com.hanialjti.allchat.data.model.MessageStatus
 import com.hanialjti.allchat.data.model.MessageSummary
 import com.hanialjti.allchat.presentation.conversation.ContactImage
@@ -42,7 +42,7 @@ fun MessageSummaryEntity.toMessageSummary() = MessageSummary(
     isSentByMe = isSentByMe
 )
 
-fun ChatWithLastMessage.toContact() = Contact(
+fun ChatWithLastMessage.toContact() = ContactWithLastMessage(
     id = chat.id,
     isGroupChat = chat.isGroupChat,
     name = nickname,

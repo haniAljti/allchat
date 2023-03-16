@@ -1,7 +1,6 @@
 package com.hanialjti.allchat.presentation
 
 import android.Manifest
-import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -18,10 +17,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.view.WindowCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -31,10 +30,9 @@ import androidx.navigation.navOptions
 import com.google.accompanist.navigation.material.ExperimentalMaterialNavigationApi
 import com.google.accompanist.navigation.material.rememberBottomSheetNavigator
 import com.google.accompanist.permissions.rememberPermissionState
-import com.hanialjti.allchat.di.getViewModel
 import com.hanialjti.allchat.data.local.datastore.UserCredentials
-import com.hanialjti.allchat.data.tasks.ChatForegroundService
 import com.hanialjti.allchat.di.get
+import com.hanialjti.allchat.di.getViewModel
 import com.hanialjti.allchat.presentation.ui.NavigationLayout
 import com.hanialjti.allchat.presentation.ui.screens.Screen
 import com.hanialjti.allchat.presentation.ui.skin.AllChatChatScreenSkin
@@ -46,7 +44,7 @@ import com.hanialjti.allchat.presentation.ui.theme.AllChatTheme
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
+        WindowCompat.setDecorFitsSystemWindows(window, false)
         setContent {
             AllChat(
                 chatSkin = DefaultChatScreenSkin,
@@ -64,7 +62,7 @@ fun AllChat(
     chatSkin: AllChatChatScreenSkin,
     conversationSkin: AllChatConversationScreenSkin,
     lifecycleOwner: Lifecycle,
-    userCredentials: UserCredentials? = null
+    userCredentials: UserCredentials? = UserCredentials("hani", "15960400")
 ) {
 
     val bottomSheetNavigator = rememberBottomSheetNavigator()
@@ -72,7 +70,7 @@ fun AllChat(
     val mainViewModel = getViewModel<MainViewModel>()
     val connectionObserver = get<ConnectionLifeCycleObserver>()
     val mainUiState by remember(mainViewModel) { mainViewModel.uiState }.collectAsState()
-    val context = LocalContext.current
+
     val notificationPermissionState = rememberPermissionState(
         permission = Manifest.permission.POST_NOTIFICATIONS
     )
@@ -89,11 +87,6 @@ fun AllChat(
         }
     }
 
-    LaunchedEffect(Unit) {
-        val chatForegroundService = Intent(context, ChatForegroundService::class.java)
-        context.startService(chatForegroundService)
-    }
-
     DisposableEffect(
         AllChatTheme {
             val currentNavRoute =
@@ -102,66 +95,67 @@ fun AllChat(
             Scaffold(
                 backgroundColor = MaterialTheme.colors.background,
                 bottomBar = {
-                    AnimatedVisibility(
-                        visible = navItems.any { it.route == currentNavRoute },
-                        enter = slideInVertically(initialOffsetY = { it }),
-                        exit = ExitTransition.None
-                    ) {
-                        BottomNavigation(
-                            backgroundColor = Color.Transparent,
-                            elevation = 0.dp,
-                            contentColor = Color.Transparent,
-                            modifier = Modifier.height(80.dp)
-                        ) {
-                            navItems.forEach { item ->
-                                val isSelected = currentNavRoute == item.route
-                                BottomNavigationItem(
-                                    selected = isSelected,
-                                    onClick = { navController.navigate(item.route, navOptions {
-                                        popUpTo(navController.graph.findStartDestination().id) {
-                                            saveState = true
-                                        }
-                                        // Avoid multiple copies of the same destination when
-                                        // reselecting the same item
-                                        launchSingleTop = true
-                                        // Restore state when reselecting a previously selected item
-                                        restoreState = true
-                                    }) },
-                                    icon = {
-                                        Box(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .height(60.dp)
-                                                .padding(horizontal = 20.dp)
-                                                .clip(RoundedCornerShape(25.dp))
-                                                .background(if (isSelected) Color(0xFF1F332D) else Color.Transparent)
-                                        ) {
-                                            Column(
-                                                Modifier.align(Alignment.Center),
-                                                horizontalAlignment = Alignment.CenterHorizontally
-                                            ) {
-                                                if (item.iconRes != null) {
-                                                    Icon(
-                                                        painter = painterResource(id = item.iconRes),
-                                                        contentDescription = null,
-                                                        tint = Color.White
-                                                    )
-                                                }
-                                                AnimatedVisibility(visible = isSelected) {
-                                                    Text(
-                                                        text = item.title,
-                                                        color = Color.White,
-                                                        fontSize = 12.sp
-                                                    )
-                                                }
-                                            }
-                                        }
-                                    }
-                                )
-                            }
-                        }
-                    }
-                }
+//                    AnimatedVisibility(
+//                        visible = navItems.any { it.route == currentNavRoute },
+//                        enter = slideInVertically(initialOffsetY = { it }),
+//                        exit = ExitTransition.None
+//                    ) {
+//                        BottomNavigation(
+//                            backgroundColor = Color.Transparent,
+//                            elevation = 0.dp,
+//                            contentColor = Color.Transparent,
+//                            modifier = Modifier.height(80.dp)
+//                        ) {
+//                            navItems.forEach { item ->
+//                                val isSelected = currentNavRoute == item.route
+//                                BottomNavigationItem(
+//                                    selected = isSelected,
+//                                    onClick = { navController.navigate(item.route, navOptions {
+//                                        popUpTo(navController.graph.findStartDestination().id) {
+//                                            saveState = true
+//                                        }
+//                                        // Avoid multiple copies of the same destination when
+//                                        // reselecting the same item
+//                                        launchSingleTop = true
+//                                        // Restore state when reselecting a previously selected item
+//                                        restoreState = true
+//                                    }) },
+//                                    icon = {
+//                                        Box(
+//                                            modifier = Modifier
+//                                                .fillMaxWidth()
+//                                                .height(60.dp)
+//                                                .padding(horizontal = 20.dp)
+//                                                .clip(RoundedCornerShape(25.dp))
+//                                                .background(if (isSelected) Color(0xFF1F332D) else Color.Transparent)
+//                                        ) {
+//                                            Column(
+//                                                Modifier.align(Alignment.Center),
+//                                                horizontalAlignment = Alignment.CenterHorizontally
+//                                            ) {
+//                                                if (item.iconRes != null) {
+//                                                    Icon(
+//                                                        painter = painterResource(id = item.iconRes),
+//                                                        contentDescription = null,
+//                                                        tint = Color.White
+//                                                    )
+//                                                }
+//                                                AnimatedVisibility(visible = isSelected) {
+//                                                    Text(
+//                                                        text = item.title,
+//                                                        color = Color.White,
+//                                                        fontSize = 12.sp
+//                                                    )
+//                                                }
+//                                            }
+//                                        }
+//                                    }
+//                                )
+//                            }
+//                        }
+//                    }
+                },
+                modifier = Modifier.systemBarsPadding()
             ) { paddingValues ->
                 Box(
                     modifier = Modifier

@@ -6,7 +6,6 @@ import androidx.room.OnConflictStrategy.Companion.REPLACE
 import androidx.room.Query
 import com.hanialjti.allchat.data.local.room.entity.MarkerEntity
 import com.hanialjti.allchat.data.model.Marker
-import com.hanialjti.allchat.data.model.MessageStatus
 import java.time.OffsetDateTime
 
 @Dao
@@ -34,17 +33,36 @@ interface MessageMarkerDao {
     @Query("SELECT COUNT(*) FROM markers WHERE marker = :marker AND message_id = :messageId")
     suspend fun getCountForMarker(messageId: String, marker: Marker): Int
 
-    @Query(
-        """
-        SELECT max(marker) 
-        FROM markers m
-        WHERE m.message_id = :messageId
-        GROUP BY m.marker
-        HAVING COUNT(*) = (SELECT COUNT(*) FROM participants WHERE chat_id = :chatId)
-        """
-    )
-    suspend fun getHighestMarkerSentByEveryParticipant(
-        messageId: String,
-        chatId: String
-    ): MessageStatus
+//    @Query(
+////        """
+////        SELECT max(marker)
+////        FROM markers m
+////        WHERE m.message_id = :messageId
+////        GROUP BY m.marker
+////        HAVING COUNT(*) = (SELECT COUNT(*) FROM participants WHERE chat_id = :chatId)
+////        """
+//        """
+//          SELECT m.id, mr.marker, max(m.timestamp), count(mr.marker)
+//          FROM messages m, markers mr
+//          WHERE  m.id = mr.message_id
+//          GROUP BY mr.marker, m.id
+//          HAVING mr.timestamp = max(mr.timestamp)
+//          ORDER by mr.marker LIMIT 2
+//        """
+//    )
+//    suspend fun getLatestMarkersSentByAllParticipants(
+//        messageId: String,
+//        chatId: String
+//    ): MarkerEntity
+
+//    @Query(
+//        """
+//            SELECT EXISTS(
+//              SELECT 1
+//              FROM markers m, participants p
+//              WHERE COUNT()
+//            )
+//        """
+//    )
+//    suspend fun sentByAllParticipants(marker: Marker, messageId: String)
 }

@@ -33,9 +33,10 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import androidx.paging.compose.LazyPagingItems
 import androidx.paging.compose.collectAsLazyPagingItems
+import androidx.paging.compose.items
 import com.hanialjti.allchat.common.utils.TWO_DIGIT_FORMAT
 import com.hanialjti.allchat.common.utils.asString
-import com.hanialjti.allchat.data.model.Contact
+import com.hanialjti.allchat.data.model.ContactWithLastMessage
 import com.hanialjti.allchat.di.getViewModel
 import com.hanialjti.allchat.presentation.component.MessageStatusIcon
 import com.hanialjti.allchat.presentation.ui.theme.Green
@@ -60,10 +61,7 @@ fun ConversationsScreen(
                 color = MaterialTheme.colors.primary,
                 fontSize = 20.sp,
                 modifier = Modifier
-                    .padding(top = 25.dp, bottom = 25.dp)
-                    .clickable {
-                        viewModel.createChatRoom()
-                    })
+                    .padding(top = 25.dp, bottom = 25.dp))
 
             Spacer(
                 modifier = Modifier
@@ -111,25 +109,27 @@ fun ConversationsScreen(
 
 @Composable
 fun ConversationList(
-    conversations: LazyPagingItems<Contact>, onConversationClicked: (Contact) -> Unit
+    conversations: LazyPagingItems<ContactWithLastMessage>,
+    onConversationClicked: (ContactWithLastMessage) -> Unit
 ) {
 
     LazyColumn(
-        horizontalAlignment = CenterHorizontally, contentPadding = PaddingValues(bottom = 80.dp)
+        horizontalAlignment = CenterHorizontally,
+        contentPadding = PaddingValues(bottom = 80.dp)
     ) {
         items(
-            count = conversations.itemCount
-        ) { index ->
-
-            val conversation = conversations[index]
+            items = conversations,
+            key = { it.id ?: it }
+        ) { conversation ->
 
             if (conversation != null) {
                 ConversationItem(
-                    modifier = Modifier.animateItemPlacement(), contact = conversation
+                    contactWithLastMessage = conversation,
+                    modifier = Modifier.animateItemPlacement(),
                 ) {
                     onConversationClicked(conversation)
                 }
-            } else PlaceholderConversation()
+            } else PlaceholderConversation(modifier = Modifier.animateItemPlacement())
 
         }
 
@@ -139,8 +139,8 @@ fun ConversationList(
 @OptIn(ExperimentalAnimationApi::class)
 @Composable
 fun ConversationItem(
-    contact: Contact,
-    modifier: Modifier = Modifier, 
+    contactWithLastMessage: ContactWithLastMessage,
+    modifier: Modifier = Modifier,
     onConversationClicked: () -> Unit
 ) {
     Row(modifier = modifier
@@ -151,10 +151,10 @@ fun ConversationItem(
 
         Box(modifier = Modifier) {
 
-            contact.image?.AsImage(modifier = Modifier.size(60.dp))
+            contactWithLastMessage.image?.AsImage(modifier = Modifier.size(60.dp))
 
             androidx.compose.animation.AnimatedVisibility(
-                visible = contact.isOnline,
+                visible = contactWithLastMessage.isOnline,
                 modifier = Modifier.align(BottomEnd),
                 enter = scaleIn(),
                 exit = scaleOut()
@@ -177,7 +177,7 @@ fun ConversationItem(
                 modifier = Modifier.fillMaxWidth()
             ) {
 
-                contact.name?.let {
+                contactWithLastMessage.name?.let {
                     Text(
                         text = it,
                         color = MaterialTheme.colors.primary,
@@ -185,7 +185,7 @@ fun ConversationItem(
                     )
                 } ?: Spacer(modifier = Modifier.width(1.dp))
 
-                contact.lastMessage?.timestamp?.let { lastUpdated ->
+                contactWithLastMessage.lastMessage?.timestamp?.let { lastUpdated ->
                     Text(
                         text = lastUpdated.toJavaLocalDateTime().asString(TWO_DIGIT_FORMAT),
                         color = MaterialTheme.colors.primary,
@@ -196,7 +196,7 @@ fun ConversationItem(
 
             Row(modifier = Modifier.fillMaxWidth()) {
 
-                contact.content?.let {
+                contactWithLastMessage.content?.let {
                     Row {
                         ConversationContentText(
                             text = it.text.asString(),
@@ -205,8 +205,8 @@ fun ConversationItem(
                             modifier = Modifier.weight(1f)
                         )
                         Box(modifier = Modifier.height(25.dp)) {
-                            if (contact.lastMessage?.isSentByMe == true) {
-                                contact.lastMessage.status.let { status ->
+                            if (contactWithLastMessage.lastMessage?.isSentByMe == true) {
+                                contactWithLastMessage.lastMessage.status.let { status ->
                                     MessageStatusIcon(messageStatus = status)
                                 }
                             }
@@ -214,7 +214,7 @@ fun ConversationItem(
                     }
                 }
 
-                if (contact.unreadMessages > 0) {
+                if (contactWithLastMessage.unreadMessages > 0) {
                     Box(
                         modifier = Modifier
                             .padding(top = 5.dp)
@@ -225,7 +225,7 @@ fun ConversationItem(
                             .padding(PaddingValues(horizontal = 7.dp))
                     ) {
                         Text(
-                            text = contact.unreadMessages.toString(),
+                            text = contactWithLastMessage.unreadMessages.toString(),
                             color = Color.White,
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.align(Center)
@@ -258,9 +258,9 @@ fun ConversationContentText(
 }
 
 @Composable
-fun PlaceholderConversation() {
+fun PlaceholderConversation(modifier: Modifier = Modifier) {
     Row(
-        modifier = Modifier
+        modifier = modifier
             .padding(15.dp)
             .fillMaxWidth(), verticalAlignment = CenterVertically
     ) {
