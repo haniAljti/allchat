@@ -29,7 +29,6 @@ class ChatViewModel(
     private val conversationRepository: ConversationRepository,
     private val resetUnreadCounterUseCase: ResetUnreadCounterUseCase,
     private val addUserToContactsUseCase: AddUserToContactsUseCase,
-    private val getContactInfoUseCase: GetContactInfoUseCase,
     private val sendReadMarkerForMessageUseCase: SendReadMarkerForMessageUseCase,
     private val conversationId: String,
     private val isGroupChat: Boolean
@@ -89,14 +88,15 @@ class ChatViewModel(
         }
 
         viewModelScope.launch {
-            getContactInfoUseCase(conversationId)
+            conversationRepository
+                .contact(conversationId)
                 .collectLatest { contactInfo ->
                     if (contactInfo != null) {
                         _chatUiState.update {
                             it.copy(
-                                name = contactInfo.name,
+                                name = contactInfo.name ?: defaultName,
                                 image = contactInfo.image,
-                                status = contactInfo.content
+                                status = UiText.DynamicString("")
                             )
                         }
                     } else {
@@ -242,7 +242,7 @@ data class ChatScreenUiState(
     val textInput: String = "",
     val attachment: Attachment? = null,
     val isBlocked: Boolean = false,
-    val name: String = defaultName,
+    val name: String? = null,
     val image: ContactImage? = null,
     val status: UiText? = null,
     val replyingTo: MessageItem.MessageData? = null,

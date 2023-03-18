@@ -21,7 +21,7 @@ import com.hanialjti.allchat.presentation.create_chat_room.CreateChatRoomViewMod
 import com.hanialjti.allchat.presentation.invite_users.InviteUsersViewModel
 import com.hanialjti.allchat.presentation.preview_attachment.PreviewAttachmentViewModel
 import com.hanialjti.allchat.presentation.viewmodels.AddContactViewModel
-import com.hanialjti.allchat.presentation.viewmodels.AuthenticationViewModel
+import com.hanialjti.allchat.presentation.authentication.AuthenticationViewModel
 import com.hanialjti.allchat.presentation.viewmodels.EditUserInfoViewModel
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -141,7 +141,6 @@ val appModule = module {
             get(),
             get(),
             get(),
-            get(),
             params.get(),
             params.get()
         )
@@ -210,16 +209,7 @@ val roomModule = module {
 
 val useCaseModule = module {
     single {
-        GetContactsUseCase(get(), get())
-    }
-    single {
         ResetUnreadCounterUseCase(get())
-    }
-    single {
-        GetContactInfoUseCase(get(), get())
-    }
-    single {
-        CreateChatRoomUseCase(get(), get())
     }
     single {
         AddUserToContactsUseCase(get())

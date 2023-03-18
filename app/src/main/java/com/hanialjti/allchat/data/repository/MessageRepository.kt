@@ -457,10 +457,6 @@ class MessageRepository(
         )
     }
 
-    override suspend fun updateMyChatState(chatState: ChatState) {
-//        conversationDao.updateMyChatState(chatState)
-    }
-
     override fun observeLastMessageNotSentByOwner(owner: String, conversationId: String) =
         messageDao.getLastMessageNotSendByOwner(owner, conversationId)
 

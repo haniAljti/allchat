@@ -2,10 +2,12 @@ package com.hanialjti.allchat.presentation.component
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
@@ -29,6 +31,8 @@ fun TopBarBackButton(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
                     .weight(1f)
+                    .clip(RoundedCornerShape(bottomEnd = 20.dp, bottomStart = 20.dp))
+                    .background(Color(0xFF3E5A55))
                     .padding(horizontal = 20.dp)
             ) {
                 IconButton(
@@ -53,12 +57,12 @@ fun TopBarBackButton(
             }
 
 
-            Spacer(
-                modifier = Modifier
-                    .height(1.dp)
-                    .fillMaxWidth()
-                    .background(MaterialTheme.colors.primary)
-            )
+//            Spacer(
+//                modifier = Modifier
+//                    .height(1.dp)
+//                    .fillMaxWidth()
+//                    .background(MaterialTheme.colors.primary)
+//            )
 
         }
     }

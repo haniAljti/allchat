@@ -8,10 +8,9 @@ import com.hanialjti.allchat.R
 import com.hanialjti.allchat.common.utils.Logger
 import com.hanialjti.allchat.data.local.room.dao.ConversationDao
 import com.hanialjti.allchat.data.local.room.entity.*
+import com.hanialjti.allchat.data.local.room.model.asChatInfo
 import com.hanialjti.allchat.data.local.room.model.toContact
-import com.hanialjti.allchat.data.model.ChatState
-import com.hanialjti.allchat.data.model.ContactWithLastMessage
-import com.hanialjti.allchat.data.model.MessageSummary
+import com.hanialjti.allchat.data.model.*
 import com.hanialjti.allchat.data.remote.ChatRemoteDataSource
 import com.hanialjti.allchat.data.remote.model.CallResult
 import com.hanialjti.allchat.data.remote.model.ChatStateUpdate
@@ -88,8 +87,9 @@ class ConversationRepository(
         remoteDataStore.updateMyChatState(chatState)
     }
 
-    fun contact(userId: String): Flow<ContactWithLastMessage?> {
-        return conversationDao.getChatWithLastMessage(userId).map { it?.toContact() }
+    suspend fun contact(userId: String): Flow<ChatInfo?> {
+        val owner = loggedInUser() ?: return emptyFlow()
+        return conversationDao.getChatInfo(owner, userId).map { it?.asChatInfo() }
     }
 
     suspend fun resetUnreadCounter(conversationId: String) {
@@ -149,7 +149,8 @@ class ConversationRepository(
             chat = ChatEntity(
                 id = userId,
                 isGroupChat = false,
-                owner = owner
+                owner = owner,
+                participants = setOf(userId, owner)
             )
 
             conversationDao.insert(chat)

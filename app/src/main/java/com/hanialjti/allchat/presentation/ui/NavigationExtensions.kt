@@ -11,6 +11,7 @@ import com.google.accompanist.navigation.material.BottomSheetNavigator
 import com.google.accompanist.navigation.material.ExperimentalMaterialNavigationApi
 import com.google.accompanist.navigation.material.ModalBottomSheetLayout
 import com.google.accompanist.navigation.material.bottomSheet
+import com.hanialjti.allchat.presentation.authentication.LoginScreen
 import com.hanialjti.allchat.presentation.chat.ChatScreen
 import com.hanialjti.allchat.presentation.component.CropImage
 import com.hanialjti.allchat.presentation.conversation.ConversationsScreen
@@ -49,7 +50,7 @@ fun NavigationLayout(
         ) {
 
             composable(Screen.SignIn.route) {
-                AuthenticationScreen(navController)
+                LoginScreen(navController)
             }
 
             composable(Screen.CropImage.route) {

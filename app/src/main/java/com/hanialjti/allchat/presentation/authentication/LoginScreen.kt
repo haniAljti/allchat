@@ -1,4 +1,4 @@
-package com.hanialjti.allchat.presentation.ui.screens
+package com.hanialjti.allchat.presentation.authentication
 
 import android.content.res.Configuration
 import androidx.annotation.StringRes
@@ -34,11 +34,10 @@ import androidx.navigation.NavHostController
 import com.hanialjti.allchat.R
 import com.hanialjti.allchat.di.getViewModel
 import com.hanialjti.allchat.presentation.ui.toConversationsScreen
-import com.hanialjti.allchat.presentation.viewmodels.AuthenticationViewModel
 
 
 @Composable
-fun AuthenticationScreen(
+fun LoginScreen(
     navController: NavHostController,
     viewModel: AuthenticationViewModel = getViewModel()
 ) {

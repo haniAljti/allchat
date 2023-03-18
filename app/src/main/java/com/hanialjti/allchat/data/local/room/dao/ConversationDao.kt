@@ -2,12 +2,12 @@ package com.hanialjti.allchat.data.local.room.dao
 
 import androidx.paging.PagingSource
 import androidx.room.*
-import androidx.room.OnConflictStrategy.Companion.IGNORE
 import androidx.room.OnConflictStrategy.Companion.REPLACE
 import com.hanialjti.allchat.data.local.room.entity.ChatEntity
 import com.hanialjti.allchat.data.local.room.entity.ParticipantEntity
+import com.hanialjti.allchat.data.local.room.model.Chat
 import com.hanialjti.allchat.data.local.room.model.ChatWithLastMessage
-import com.hanialjti.allchat.data.model.MessageSummary
+import com.hanialjti.allchat.data.model.ChatInfo
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -46,6 +46,26 @@ interface ConversationDao {
         """
     )
     fun getContactsWithLastMessage(owner: String): PagingSource<Int, ChatWithLastMessage>
+
+    @Transaction
+    @Query(
+        """
+        SELECT c.id                                                          as chat_id,
+               c.owner                                                       as chat_owner,
+               c.is_group_chat                                               as chat_is_group_chat,
+               c.unread_messages_count                                       as chat_unread_messages_count,
+               c.participants                                                as chat_participants,
+               u.is_online                                                   as user_is_online,
+               u.id                                                          as user_id,
+               a.nickname                                                    as nickname,
+               a.avatar_path                                                 as avatar
+        FROM chats c
+                 LEFT JOIN entity_info a ON a.id = c.id
+                 LEFT JOIN users u ON u.id = c.id
+        WHERE c.owner = :owner AND c.id = :chatId
+        """
+    )
+    fun getChatInfo(owner: String, chatId: String): Flow<Chat?>
 
     @Transaction
     @Query(

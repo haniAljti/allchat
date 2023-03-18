@@ -1,4 +1,4 @@
-package com.hanialjti.allchat.presentation.viewmodels
+package com.hanialjti.allchat.presentation.authentication
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -7,7 +7,6 @@ import com.hanialjti.allchat.data.local.datastore.UserCredentials
 import com.hanialjti.allchat.data.remote.InvalidUsernameOrPassword
 import com.hanialjti.allchat.data.remote.model.CallResult
 import com.hanialjti.allchat.data.repository.AuthenticationRepository
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest

@@ -3,6 +3,8 @@ package com.hanialjti.allchat.data.local.room.entity
 import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
+import com.hanialjti.allchat.data.model.Participant
+import com.hanialjti.allchat.data.model.Role
 
 @Entity(tableName = "chats")
 data class ChatEntity(
@@ -13,4 +15,12 @@ data class ChatEntity(
     @ColumnInfo(name = "unread_messages_count")
     val unreadMessages: Int = 0,
     val participants: Set<String> = setOf()
-)
+) {
+    data class Participant(
+        val userId: String,
+        val state: ChatState = ChatState.Inactive,
+        val role: Role = Role.Participant
+    )
+
+    enum class ChatState(val value: Int) { Inactive(0), Active(1), Composing(2), Paused(3) }
+}

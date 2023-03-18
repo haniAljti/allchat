@@ -39,7 +39,6 @@ interface IMessageRepository {
     fun fetchMessagesFor(chatId: String): Flow<PagingData<MessageItem>>
 
     fun messageUpdatesStream(): Flow<MessageItem.MessageData>
-    suspend fun updateMyChatState(chatState: ChatState)
     suspend fun sendSeenMarkerForMessage(externalMessageId: String): CallResult<Boolean>
     suspend fun updateMessage(message: MessageEntity)
 
