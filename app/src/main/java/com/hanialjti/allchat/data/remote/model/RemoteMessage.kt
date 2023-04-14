@@ -11,7 +11,7 @@ sealed class RemoteMessageItem(open val id: String)
 
 data class RemoteMessage(
     override val id: String,
-    val chatId: String? = null,
+    val chatId: String,
     val sender: String? = null,
     val messageStatus: MessageStatus,
     val type: MessageType? = null,

@@ -1,20 +1,17 @@
 package com.hanialjti.allchat.presentation.chat
 
-import android.os.Build
-import androidx.annotation.RequiresApi
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.paging.cachedIn
 import com.hanialjti.allchat.data.model.Attachment
-import com.hanialjti.allchat.data.model.ChatState
 import com.hanialjti.allchat.data.model.MessageItem
+import com.hanialjti.allchat.data.model.Participant
 import com.hanialjti.allchat.data.remote.model.DownloadProgress
 import com.hanialjti.allchat.data.remote.model.UploadProgress
 import com.hanialjti.allchat.data.repository.ConversationRepository
 import com.hanialjti.allchat.data.repository.FileRepository
 import com.hanialjti.allchat.data.repository.IMessageRepository
 import com.hanialjti.allchat.data.repository.UserRepository
-import com.hanialjti.allchat.domain.usecase.*
 import com.hanialjti.allchat.presentation.conversation.ContactImage
 import com.hanialjti.allchat.presentation.conversation.UiText
 import kotlinx.coroutines.flow.*
@@ -23,15 +20,11 @@ import timber.log.Timber
 import java.io.File
 
 class ChatViewModel(
-    private val chatRepository: IMessageRepository,
+    private val messageRepository: IMessageRepository,
     private val fileRepository: FileRepository,
     private val userRepository: UserRepository,
     private val conversationRepository: ConversationRepository,
-    private val resetUnreadCounterUseCase: ResetUnreadCounterUseCase,
-    private val addUserToContactsUseCase: AddUserToContactsUseCase,
-    private val sendReadMarkerForMessageUseCase: SendReadMarkerForMessageUseCase,
-    private val conversationId: String,
-    private val isGroupChat: Boolean
+    private val conversationId: String
 ) : ViewModel() {
 
     private val _chatUiState = MutableStateFlow(ChatScreenUiState())
@@ -41,19 +34,53 @@ class ChatViewModel(
     private var lastReadMessage: MessageItem.MessageData? = null
 
     fun updateLastReadMessage(lastReadMessage: MessageItem.MessageData) {
-        if (this.lastReadMessage == null || this.lastReadMessage != lastReadMessage && this.lastReadMessage?.isOlderThan(lastReadMessage) == true) {
+        if (this.lastReadMessage == null || this.lastReadMessage != lastReadMessage && this.lastReadMessage?.isOlderThan(
+                lastReadMessage
+            ) == true
+        ) {
             Timber.d("lastReadMessage updated. New value = $lastReadMessage")
             this.lastReadMessage = lastReadMessage
             viewModelScope.launch {
-                sendReadMarkerForMessageUseCase(lastReadMessage)
+                messageRepository.sendSeenMarkerForMessage(lastReadMessage.id)
             }
         }
     }
 
     init {
-        updateMyChatState(ChatState.Active(conversationId))
+
         viewModelScope.launch {
-            chatRepository.resendAllPendingMessages()
+            val chatDetails = conversationRepository
+                .getChatDetails(conversationId)
+
+            if (chatDetails != null) {
+                _chatUiState.update {
+                    it.copy(
+                        name = chatDetails.name ?: defaultName,
+                        image = chatDetails.avatar,
+                        status = null, // TODO
+                        isGroupChat = chatDetails.isGroupChat
+                    )
+                }
+            } else {
+
+                val userDetails = userRepository.getUserDetails(conversationId)
+
+                _chatUiState.update {
+                    it.copy(
+                        name = userDetails?.name ?: defaultName,
+                        image = userDetails?.avatar,
+                        status = null, // TODO
+                        isGroupChat = false
+                    )
+                }
+
+                shouldCreateConversation = true
+            }
+
+        }
+
+        viewModelScope.launch {
+            messageRepository.resendAllPendingMessages()
         }
 
         viewModelScope.launch {
@@ -87,64 +114,47 @@ class ChatViewModel(
                 }
         }
 
-        viewModelScope.launch {
-            conversationRepository
-                .contact(conversationId)
-                .collectLatest { contactInfo ->
-                    if (contactInfo != null) {
-                        _chatUiState.update {
-                            it.copy(
-                                name = contactInfo.name ?: defaultName,
-                                image = contactInfo.image,
-                                status = UiText.DynamicString("")
-                            )
-                        }
-                    } else {
-                        shouldCreateConversation = !isGroupChat
-                    }
-                }
-        }
+
 
     }
 
     fun setAllMessagesAsRead() {
         //TODO use GlobalScope
         viewModelScope.launch {
-            chatRepository.setMessagesAsRead(conversationId)
+            messageRepository.setMessagesAsRead(conversationId)
         }
     }
 
-    val messages = chatRepository
+    val messages = messageRepository
         .fetchMessagesFor(conversationId)
         .onEach {
-            resetUnreadCounterUseCase(conversationId)
+            conversationRepository.resetUnreadCounter(conversationId)
         }
         .cachedIn(viewModelScope)
 
 
-    @RequiresApi(Build.VERSION_CODES.Q)
     fun downloadAttachment(messageData: MessageItem.MessageData) {
         viewModelScope.launch {
-            chatRepository.downloadAttachment(messageData)
+            messageRepository.downloadAttachment(messageData)
         }
     }
 
-    private fun updateMyChatState(chatState: ChatState) {
+    private fun updateMyChatState(state: Participant.State) {
         viewModelScope.launch {
-            conversationRepository.updateMyChatState(chatState)
+            conversationRepository.updateMyChatState(conversationId, state)
         }
     }
 
     private suspend fun addUserToContacts() {
-        addUserToContactsUseCase(conversationId)
+        conversationRepository.addUserToContactList(conversationId)
     }
 
-    @RequiresApi(Build.VERSION_CODES.Q)
     fun sendMessage() = viewModelScope.launch {
 
         val textInput = _chatUiState.value.textInput
         val attachment = _chatUiState.value.attachment
         val replyingTo = _chatUiState.value.replyingTo
+        val isGroupChat = _chatUiState.value.isGroupChat
 
         if (shouldCreateConversation) {
             addUserToContacts()
@@ -159,7 +169,7 @@ class ChatViewModel(
         }
 
         if (textInput.isNotBlank() || attachment != null) {
-            chatRepository.sendMessage(
+            messageRepository.sendMessage(
                 body = textInput,
                 replyingTo = replyingTo?.id,
                 contactId = conversationId,
@@ -178,9 +188,9 @@ class ChatViewModel(
 
         updateMyChatState(
             if (text.isEmpty()) {
-                ChatState.Paused(conversationId)
+                Participant.State.Paused
             } else {
-                ChatState.Composing(conversationId)
+                Participant.State.Composing
             }
         )
 
@@ -197,10 +207,6 @@ class ChatViewModel(
             userRepository.unblockUser(conversationId)
         }
     }
-
-//    fun setThisChatAsInactive() {
-//        updateMyChatState(ChatState.Inactive(conversationId))
-//    }
 
     fun createNewTempFile(fileExtension: String): File? =
         fileRepository.createNewTempFile(fileExtension = fileExtension)
@@ -234,6 +240,15 @@ class ChatViewModel(
         }
     }
 
+    fun updateIsChatMenuVisible(isChatMenuVisible: Boolean) {
+        viewModelScope.launch {
+            _chatUiState.update {
+                it.copy(isChatMenuVisible = isChatMenuVisible)
+            }
+        }
+    }
+
+
 }
 
 const val defaultName = "AllChat User"
@@ -244,9 +259,11 @@ data class ChatScreenUiState(
     val isBlocked: Boolean = false,
     val name: String? = null,
     val image: ContactImage? = null,
+    val isGroupChat: Boolean = false,
     val status: UiText? = null,
     val replyingTo: MessageItem.MessageData? = null,
     val uploadProgresses: Map<Any, UploadProgress> = mapOf(),
     val downloadProgresses: Map<Any, DownloadProgress> = mapOf(),
-    val lastCreatedTempFile: File? = null
+    val lastCreatedTempFile: File? = null,
+    val isChatMenuVisible: Boolean = false
 )

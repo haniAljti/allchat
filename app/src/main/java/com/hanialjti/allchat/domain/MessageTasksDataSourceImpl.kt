@@ -11,7 +11,6 @@ class MessageTasksDataSourceImpl(
 
     private fun createSendMessageWorkRequest() =
         OneTimeWorkRequestBuilder<SendMessageWorker>()
-//            .setInputData(workDataOf(SendMessageWorker.MESSAGE_ID_KEY to messageId))
             .setConstraints(
                 Constraints.Builder()
                     .setRequiredNetworkType(NetworkType.CONNECTED)

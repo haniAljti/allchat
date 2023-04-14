@@ -7,7 +7,7 @@ import java.time.LocalDateTime
 data class User(
     val id: String,
     val name: String? = defaultName,
-    val avatar: ContactImage? = null,
+    val avatar: ContactImage = ContactImage.DefaultUserImage,
     val isOnline: Boolean = false,
     val lastOnline: LocalDateTime? = null
 )

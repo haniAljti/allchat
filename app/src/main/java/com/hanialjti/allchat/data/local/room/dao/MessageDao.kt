@@ -3,13 +3,10 @@ package com.hanialjti.allchat.data.local.room.dao
 import androidx.paging.PagingSource
 import androidx.room.*
 import androidx.room.OnConflictStrategy.Companion.REPLACE
-import com.hanialjti.allchat.common.utils.FileUtils
 import com.hanialjti.allchat.data.local.room.entity.MessageEntity
 import com.hanialjti.allchat.data.local.room.entity.hasLesserValueThan
 import com.hanialjti.allchat.data.model.Attachment
 import com.hanialjti.allchat.data.model.MessageStatus
-import com.hanialjti.allchat.data.remote.model.Location
-import com.hanialjti.allchat.data.remote.model.Media
 import kotlinx.coroutines.flow.Flow
 import java.time.OffsetDateTime
 
@@ -49,6 +46,15 @@ interface MessageDao {
         timestamp: OffsetDateTime,
         owner: String,
         conversationId: String
+    )
+
+    @Query("""
+        UPDATE messages SET attachment = :attachment
+        WHERE id = :messageId
+    """)
+    suspend fun updateAttachment(
+        messageId: String,
+        attachment: Attachment
     )
 
     @Query(

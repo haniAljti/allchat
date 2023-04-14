@@ -7,15 +7,15 @@ import java.io.InputStream
 import java.io.OutputStream
 
 //TODO encrypt preferences
-class UserPreferencesSerializer : Serializer<UserPreferences> {
+class UserPreferencesSerializer : Serializer<AppPreferences> {
 
-    override val defaultValue: UserPreferences
-        get() = UserPreferences()
+    override val defaultValue: AppPreferences
+        get() = AppPreferences()
 
-    override suspend fun readFrom(input: InputStream): UserPreferences {
+    override suspend fun readFrom(input: InputStream): AppPreferences {
         return try {
             Json.decodeFromString(
-                deserializer = UserPreferences.serializer(),
+                deserializer = AppPreferences.serializer(),
                 string = input.readBytes().decodeToString()
             )
         } catch (e: SerializationException) {
@@ -24,10 +24,10 @@ class UserPreferencesSerializer : Serializer<UserPreferences> {
         }
     }
 
-    override suspend fun writeTo(t: UserPreferences, output: OutputStream) {
+    override suspend fun writeTo(t: AppPreferences, output: OutputStream) {
         output.write(
             Json.encodeToString(
-                serializer = UserPreferences.serializer(),
+                serializer = AppPreferences.serializer(),
                 value = t
             ).encodeToByteArray()
         )

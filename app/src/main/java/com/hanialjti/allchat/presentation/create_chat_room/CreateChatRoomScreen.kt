@@ -7,6 +7,7 @@ import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
 import com.hanialjti.allchat.di.getViewModel
 import com.hanialjti.allchat.presentation.invite_users.SelectableUsers
+import com.hanialjti.allchat.presentation.ui.toChatScreen
 import kotlinx.coroutines.launch
 
 @Composable
@@ -16,6 +17,14 @@ fun CreateChatRoomScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val coroutineScope = rememberCoroutineScope()
+
+    if (uiState.isCreated) {
+        LaunchedEffect(Unit) {
+            uiState.chatId?.let {
+                navController.toChatScreen(it, true)
+            }
+        }
+    }
 
     HorizontalPager(
         pageCount = 2,
@@ -59,6 +68,7 @@ fun CreateChatRoomScreen(
                         viewModel.createChatRoom()
                     },
                     modifier = Modifier.fillMaxSize(),
+                    isLoading = uiState.isLoading
                 )
             }
         }

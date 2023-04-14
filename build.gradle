@@ -1,18 +1,18 @@
 buildscript {
     ext {
-        compose_version = '1.4.0-alpha05'
-        room_version = '2.5.0'
+        compose_version = '1.5.0-alpha02'
+        room_version = '2.5.1'
         lifecycle_version = "2.6.0-alpha01"
         fragment_version = '1.5.2'
         activity_version = '1.6.0-beta01'
         nav_version = '2.5.3'
         paging_version = "3.1.1"
-        koin_version = '3.3.2'
+        koin_version = '3.4.0'
         mockito_kotlin_version = '4.1.0'
-        mockito_version = '4.9.0'
+        mockito_version = '5.2.0'
         work_version = "2.7.1"
         smack_version = '4.4.6'
-        ktor_version = '2.2.3'
+        ktor_version = '2.2.4'
     }
     dependencies {
         ext.kotlin_version = '1.8.0'

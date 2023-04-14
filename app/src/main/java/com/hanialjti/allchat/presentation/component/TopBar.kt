@@ -17,8 +17,8 @@ import com.hanialjti.allchat.R
 
 @Composable
 fun TopBar(
+    title: String,
     modifier: Modifier = Modifier,
-    title: String? = "",
     onBackClicked: () -> Unit,
     moreOptions: @Composable () -> Unit
 ) {
@@ -41,26 +41,17 @@ fun TopBar(
                     )
                 }
 
-                title?.let {
-                    Text(
-                        text = title,
-                        color = Color.White,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = modifier
-                            .weight(1f)
-                    )
-                }
+                Text(
+                    text = title,
+                    color = Color.White,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = modifier
+                        .weight(1f)
+                )
 
                 moreOptions()
             }
-
-//            Spacer(
-//                modifier = Modifier
-//                    .height(2.dp)
-//                    .fillMaxWidth()
-//                    .background(Color.White)
-//            )
         }
     }
 }

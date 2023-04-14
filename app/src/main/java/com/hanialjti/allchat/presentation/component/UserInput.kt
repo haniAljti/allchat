@@ -8,15 +8,19 @@ import androidx.compose.animation.core.updateTransition
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material.*
+import androidx.compose.material.ExperimentalMaterialApi
+import androidx.compose.material.FractionalThreshold
+import androidx.compose.material.swipeable
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -34,7 +38,6 @@ import com.hanialjti.allchat.R
 import com.hanialjti.allchat.data.model.Attachment
 import com.hanialjti.allchat.data.model.MessageItem
 import com.hanialjti.allchat.data.model.ReplyingToMessage
-import com.hanialjti.allchat.presentation.ui.theme.Green
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.Duration
@@ -57,7 +60,7 @@ import kotlin.time.toKotlinDuration
 //    ) { }
 //}
 
-@OptIn(ExperimentalAnimationApi::class, ExperimentalMaterialApi::class)
+@OptIn(ExperimentalMaterialApi::class)
 @Composable
 fun TextInput(
     modifier: Modifier = Modifier,
@@ -82,7 +85,15 @@ fun TextInput(
 
         AnimatedVisibility(visible = replyingTo != null) {
             replyingTo?.id?.let {
-                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 10.dp)
+                        .clip(RoundedCornerShape(20))
+                        .background(MaterialTheme.colorScheme.surface),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     ReplyingTo(
                         message = ReplyingToMessage(
                             it,
@@ -90,12 +101,13 @@ fun TextInput(
                             replyingTo.body,
                             replyingTo.attachment
                         ),
-                        modifier = Modifier.weight(1f).padding(10.dp)
+                        modifier = Modifier
+                            .weight(1f)
                     ) { }
                     IconButton(onClick = { onReplyToCleared() }) {
                         Icon(
                             painter = painterResource(id = R.drawable.ic_close),
-                            tint = Color.White,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(24.dp),
                             contentDescription = null
                         )
@@ -104,7 +116,8 @@ fun TextInput(
             }
         }
 
-        val userInputState = rememberUserInputState(recordInitialValue = RecordingButtonState.Initial)
+        val userInputState =
+            rememberUserInputState(recordInitialValue = RecordingButtonState.Initial)
         val attachmentDeleteRecordingButton by remember { derivedStateOf { attachmentButtonVisible || userInputState.isRecording } }
         var showSelectAttachmentMenu by remember { mutableStateOf(false) }
         val scope = rememberCoroutineScope()
@@ -123,7 +136,10 @@ fun TextInput(
                 }
             }
 
-            val anchors = mapOf(-width + (sizePx / 2) to RecordingButtonState.Cancel, 0f to RecordingButtonState.Initial)
+            val anchors = mapOf(
+                -width + (sizePx / 2) to RecordingButtonState.Cancel,
+                0f to RecordingButtonState.Initial
+            )
 
             val buttonMode by remember(message, attachment, recordButtonVisible) {
                 derivedStateOf {
@@ -156,10 +172,7 @@ fun TextInput(
             if (userInputState.isRecording) {
                 textInputModifier = textInputModifier
                     .background(
-                        brush = Brush.linearGradient(
-                            0f to Color(0xFF8F1100),
-                            0.5f to Color(0xFF111A14)
-                        )
+                        MaterialTheme.colorScheme.secondaryContainer
                     )
             }
 
@@ -194,13 +207,18 @@ fun TextInput(
                 ) {
 
 
-                    AnimatedContent(targetState = userInputState.isRecording, modifier = Modifier.weight(1f)) {
+                    AnimatedContent(
+                        targetState = userInputState.isRecording,
+                        modifier = Modifier.weight(1f)
+                    ) {
                         if (it) {
 
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.SpaceBetween,
-                                modifier = Modifier.width(100.dp).background(Color.Transparent)
+                                modifier = Modifier
+                                    .width(100.dp)
+                                    .background(Color.Transparent)
                             ) {
                                 var ticks by remember { mutableStateOf(0) }
                                 LaunchedEffect(Unit) {
@@ -219,14 +237,15 @@ fun TextInput(
                                         .padding(horizontal = 25.dp)
                                         .size(24.dp),
                                     contentDescription = null,
-                                    tint = Color.White
+                                    tint = MaterialTheme.colorScheme.onSecondaryContainer
                                 )
 
                                 Text(
                                     text = "Recording $duration",
                                     fontSize = 14.sp,
                                     maxLines = 1,
-                                    modifier = modifier.weight(1f).background(Color.Transparent)
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    modifier = modifier.weight(1f)
                                 )
 
                             }
@@ -246,7 +265,7 @@ fun TextInput(
                                     Row(
                                         modifier
                                             .clip(RoundedCornerShape(30))
-                                            .background(Color(0xFF383838))
+                                            .background(MaterialTheme.colorScheme.secondaryContainer)
                                             .height(45.dp)
                                             .padding(start = 15.dp)
                                             .padding(vertical = 1.dp),
@@ -256,7 +275,7 @@ fun TextInput(
                                             if (message.isEmpty()) Text(
                                                 stringResource(id = R.string.message_text_field_placeholder),
                                                 style = LocalTextStyle.current.copy(
-                                                    color = Color.White,
+                                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
                                                     fontSize = 16.sp
                                                 )
                                             )
@@ -272,7 +291,7 @@ fun TextInput(
                                                     painter = painterResource(id = R.drawable.ic_attachment),
                                                     modifier = Modifier.size(24.dp),
                                                     contentDescription = null,
-                                                    tint = Color.White
+                                                    tint = MaterialTheme.colorScheme.onSecondaryContainer
                                                 )
                                             }
                                         }
@@ -288,13 +307,15 @@ fun TextInput(
                     AnimatedContent(
                         targetState = buttonMode,
                         transitionSpec = { scaleIn() with scaleOut() },
-                        modifier = Modifier.offset {
-                            IntOffset(
-                                userInputState.swipeOffset.roundToInt(),
+                        modifier = Modifier
+                            .shadow(elevation = 1.dp, shape = CircleShape)
+                            .offset {
+                                IntOffset(
+                                    userInputState.swipeOffset.roundToInt(),
 //                                swipeableState.offset.value.roundToInt(),
-                                0
-                            )
-                        }
+                                    0
+                                )
+                            }
                     ) {
 
                         val buttonModifier = Modifier
@@ -308,7 +329,8 @@ fun TextInput(
                                 IconButton(
                                     onClick = onSendClicked,
                                     modifier = buttonModifier
-                                        .background(Color(0xFF383838))
+                                        .shadow(elevation = 10.dp, shape = CircleShape)
+                                        .background(MaterialTheme.colorScheme.secondary)
                                         .size(initialButtonSize)
                                 ) {
                                     Icon(
@@ -317,21 +339,24 @@ fun TextInput(
                                         ),
                                         contentDescription = null,
                                         modifier = Modifier.size(24.dp),
-                                        tint = Color.White
+                                        tint = MaterialTheme.colorScheme.onSecondary
                                     )
                                 }
                             }
                             SendButtonMode.Record -> {
 
                                 val transition =
-                                    updateTransition(targetState = userInputState.isRecording, label = "")
+                                    updateTransition(
+                                        targetState = userInputState.isRecording,
+                                        label = ""
+                                    )
 
                                 val recordButtonSize by transition.animateDp(label = "") { recording ->
                                     if (recording) 60.dp else initialButtonSize
                                 }
 
                                 val recordButtonColor by transition.animateColor(label = "") { recording ->
-                                    if (recording) Green else Color(0xFF3E5A55)
+                                    if (recording) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.secondary
                                 }
 
                                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -339,7 +364,8 @@ fun TextInput(
                                         Text(
                                             text = "< Swipe to delete",
                                             fontSize = 12.sp,
-                                            maxLines = 1
+                                            maxLines = 1,
+                                            color = MaterialTheme.colorScheme.onSecondaryContainer
                                         )
                                     IconButton(
                                         onClick = onRecordClicked,
@@ -347,6 +373,7 @@ fun TextInput(
                                         modifier = buttonModifier
                                             .background(recordButtonColor)
                                             .size(recordButtonSize)
+
                                     ) {
                                         Icon(
                                             painter = painterResource(
@@ -354,7 +381,7 @@ fun TextInput(
                                             ),
                                             contentDescription = null,
                                             modifier = Modifier.size(24.dp),
-                                            tint = Color.White
+                                            tint = MaterialTheme.colorScheme.onSecondary
                                         )
                                     }
                                 }
@@ -374,7 +401,7 @@ fun TextInput(
                     horizontalArrangement = Arrangement.SpaceEvenly,
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
-                        .background(Color(0xFF3E5A55))
+                        .background(MaterialTheme.colorScheme.secondaryContainer)
                         .height(62.dp)
                 ) {
                     SelectAttachmentOption.all.forEach { option ->

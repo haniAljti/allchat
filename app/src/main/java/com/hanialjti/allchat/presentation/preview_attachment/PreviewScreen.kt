@@ -3,11 +3,12 @@ package com.hanialjti.allchat.presentation.preview_attachment
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
-import android.os.Build
-import androidx.annotation.RequiresApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.runtime.*
@@ -29,7 +30,6 @@ import kotlinx.coroutines.launch
 import org.koin.core.parameter.parametersOf
 import java.io.File
 
-@RequiresApi(Build.VERSION_CODES.Q)
 @Composable
 fun MediaPreview(
     messageId: String,
@@ -70,6 +70,7 @@ fun MediaPreview(
 
 
         TopBar(
+            title = "",
             onBackClicked = { navController.popBackStack() },
             modifier = Modifier.height(75.dp)
         ) {

@@ -4,6 +4,7 @@ import androidx.compose.foundation.pager.PagerState
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.hanialjti.allchat.data.model.User
+import com.hanialjti.allchat.data.remote.model.CallResult
 import com.hanialjti.allchat.data.repository.ConversationRepository
 import com.hanialjti.allchat.data.repository.UserRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -22,7 +23,7 @@ class CreateChatRoomViewModel(
 
     init {
         viewModelScope.launch {
-            userRepository.getAllUsersByOwnerId()
+            userRepository.getAllUsers()
                 .collectLatest { userList ->
                     _uiState.update {
                         it.copy(
@@ -35,9 +36,18 @@ class CreateChatRoomViewModel(
 
     fun createChatRoom() {
         viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true) }
             val invitedUsers = _uiState.value.selectedUsers.map { it.id }.toSet()
             val name = _uiState.value.roomName
-            conversationRepository.createChatRoom(name, "", invitedUsers)
+            val creationResult = conversationRepository.createChatRoom(name, "", invitedUsers)
+            if (creationResult is CallResult.Success) {
+                _uiState.update {
+                    it.copy(
+                        isCreated = true,
+                        chatId = creationResult.data
+                    )
+                }
+            }
         }
     }
 
@@ -80,7 +90,9 @@ data class CreateChatRoomUiState(
     val message: String? = null,
     val roomName: String = "",
     val roomImage: String? = null,
-    val isLoading: Boolean = false
+    val chatId: String? = null,
+    val isLoading: Boolean = false,
+    val isCreated: Boolean = false
 )
 
 enum class GroupChatCreationStep(val pageIndex: Int) {

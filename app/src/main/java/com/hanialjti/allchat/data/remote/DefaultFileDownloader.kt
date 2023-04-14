@@ -17,14 +17,14 @@ class DefaultFileDownloader(
         install(Logging)
     },
     private val externalScope: CoroutineScope
-) {
+): FileDownloader {
 
     private val _filesDownloadProgress = MutableStateFlow<MutableMap<Any, DownloadProgress>>(
         mutableMapOf()
     )
-    val filesDownloadProgress: SharedFlow<MutableMap<Any, DownloadProgress>> get() = _filesDownloadProgress
+    override val filesDownloadProgress: SharedFlow<MutableMap<Any, DownloadProgress>> get() = _filesDownloadProgress
 
-    suspend fun download(url: String, identifier: Any = url): ByteArray {
+    override suspend fun download(url: String, identifier: Any): ByteArray {
         var totalLength: Long = 0
         val response = httpClient.get(url) {
             onDownload { bytesSentTotal, contentLength ->

@@ -3,8 +3,8 @@ package com.hanialjti.allchat.presentation.component
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Text
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.remember
@@ -16,6 +16,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.request.ImageRequest
 import com.hanialjti.allchat.data.model.MessageItem
 import com.hanialjti.allchat.data.remote.model.DownloadProgress
 
@@ -31,7 +32,9 @@ fun ReceivedMessage(
     onPdfClicked: () -> Unit,
     onReplyClicked: () -> Unit,
     modifier: Modifier = Modifier,
-    isActiveMessage: Boolean
+    isActiveMessage: Boolean,
+    containerColor: Color,
+    contentColor: Color
 ) {
 
     val isSameSenderFromNextMessage = remember(previousMessage, message) {
@@ -44,29 +47,38 @@ fun ReceivedMessage(
         modifier = modifier
     ) {
 
-        Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.Start) {
+        Row(
+            verticalAlignment = Alignment.Bottom,
+            horizontalArrangement = Arrangement.Start,
+            modifier = Modifier.padding(start = 20.dp)
+        ) {
 
             if (!isSameSenderFromNextMessage.value) {
                 message.senderImage?.AsImage(modifier = Modifier.size(30.dp))
             } else Spacer(modifier = Modifier.size(30.dp))
 
-            Column(modifier = Modifier.padding(start = 10.dp)) {
+            BoxWithConstraints(
+                modifier = Modifier
+                    .padding(start = 10.dp)
+                    .background(
+                        color = containerColor,
+                        shape = RoundedCornerShape(20.dp)
+                    )
+            ) {
 
                 Column(
-                    modifier = Modifier
-                        .widthIn(100.dp, 350.dp)
-                        .background(
-                            color = Color(0xFF383838),
-                            shape = RoundedCornerShape(20.dp)
-                        ),
                     horizontalAlignment = Alignment.End,
-                    verticalArrangement = Arrangement.Bottom
+                    verticalArrangement = Arrangement.Bottom,
+                    modifier = Modifier.widthIn(100.dp, maxWidth * 0.85f)
                 ) {
 
                     message.replyTo?.let {
-                        ReplyingTo(message = it, modifier = Modifier
-                            .padding(horizontal = 10.dp).padding(top = 10.dp)
-                            .align(Alignment.Start)) {
+                        ReplyingTo(
+                            message = it, modifier = Modifier
+                                .padding(horizontal = 10.dp)
+                                .padding(top = 10.dp)
+                                .align(Alignment.Start)
+                        ) {
                             onReplyClicked()
                         }
                     }
@@ -80,7 +92,9 @@ fun ReceivedMessage(
                             onPauseAudio = onPauseAudio,
                             onImageClicked = onImageClicked,
                             onPdfClicked = onPdfClicked,
-                            isActiveMessage = isActiveMessage
+                            isActiveMessage = isActiveMessage,
+                            containerColor = containerColor,
+                            contentColor = contentColor
                         ) {
                             if (message.body.isNullOrEmpty()) {
                                 Row(
@@ -93,7 +107,7 @@ fun ReceivedMessage(
                                 ) {
                                     Text(
                                         text = message.time,
-                                        color = MaterialTheme.colors.primary,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         fontSize = 12.sp,
                                         modifier = Modifier.alpha(0.6f)
                                     )
@@ -105,7 +119,7 @@ fun ReceivedMessage(
                     if (!message.body.isNullOrEmpty()) {
                         Text(
                             text = message.body,
-                            color = Color.White,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = TextAlign.Start,
                             modifier = Modifier
                                 .align(Alignment.Start)
@@ -122,13 +136,14 @@ fun ReceivedMessage(
                         ) {
                             Text(
                                 text = message.time,
-                                color = MaterialTheme.colors.primary,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = 12.sp,
-                                modifier = Modifier.alpha(0.6f)
+                                modifier = Modifier
+                                    .alpha(0.6f)
+                                    .padding(horizontal = 5.dp)
                             )
                         }
                     }
-
                 }
             }
         }

@@ -1,31 +1,31 @@
 package com.hanialjti.allchat
 
 import android.app.Application
-import android.content.Intent
+import coil.ImageLoader
+import coil.ImageLoaderFactory
+import coil.disk.DiskCache
 import com.hanialjti.allchat.data.remote.ConnectionType
-import com.hanialjti.allchat.data.remote.xmpp.model.PingConfigurations
 import com.hanialjti.allchat.data.remote.xmpp.model.XmppConnectionConfig
-import com.hanialjti.allchat.data.tasks.ChatForegroundService
 import com.hanialjti.allchat.di.AllChat
-import org.jivesoftware.smack.android.AndroidSmackInitializer
 import timber.log.Timber
 import timber.log.Timber.DebugTree
 import timber.log.Timber.Forest.plant
 
-class AllChatApplication: Application() {
+class AllChatApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         AllChat.initialize(
             this,
             ConnectionType.Xmpp(
                 XmppConnectionConfig(
-//                    host = "192.168.0.42",
-                    host = "192.168.1.147",
+                    host = "192.168.0.205",
                     domain = "hanis-laptop",
                     port = 5222
                 )
             )
         )
+
+
 
         if (Timber.forest().isEmpty()) {
             plant(DebugTree())
@@ -36,6 +36,8 @@ class AllChatApplication: Application() {
         super.onTerminate()
         AllChat.stop()
     }
+
+
 }
 
 ///** A tree which logs important information for crash reporting. */

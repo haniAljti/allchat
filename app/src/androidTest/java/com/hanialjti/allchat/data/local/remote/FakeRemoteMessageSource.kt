@@ -1,14 +1,13 @@
 package com.hanialjti.allchat.data.local.remote
 
 import com.hanialjti.allchat.data.local.room.entity.MessageEntity
-import com.hanialjti.allchat.data.model.ChatState
 import com.hanialjti.allchat.data.model.Marker
 import com.hanialjti.allchat.data.model.MessageStatus
 import com.hanialjti.allchat.data.model.MessageType
+import com.hanialjti.allchat.data.remote.MessageRemoteDataSource
 import com.hanialjti.allchat.data.remote.model.CallResult
 import com.hanialjti.allchat.data.remote.model.MessagePage
 import com.hanialjti.allchat.data.remote.model.RemoteMessage
-import com.hanialjti.allchat.data.remote.MessageRemoteDataSource
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import java.time.OffsetDateTime
@@ -27,12 +26,12 @@ class FakeRemoteMessageSource: MessageRemoteDataSource {
         return CallResult.Success("fakeId")
     }
 
-    override suspend fun sendMessage(message: MessageEntity, isMarkable: Boolean): CallResult<String> {
+    override suspend fun sendMessage(
+        message: MessageEntity,
+        thread: String?,
+        isMarkable: Boolean
+    ): CallResult<String> {
         return CallResult.Success("fakeId")
-    }
-
-    override suspend fun getOfflineMessages(): List<RemoteMessage> {
-        TODO("Not yet implemented")
     }
 
     override suspend fun getPreviousPage(
@@ -77,7 +76,8 @@ class FakeRemoteMessageSource: MessageRemoteDataSource {
                     markers = mapOf(
                         "user1@AllChat" to Marker.Seen
                     ),
-                    messageStatus = MessageStatus.Sent
+                    messageStatus = MessageStatus.Sent,
+                    chatId = "chat1"
                 ),
                 RemoteMessage(
                     id = "message2",

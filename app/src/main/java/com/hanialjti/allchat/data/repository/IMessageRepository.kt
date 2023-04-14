@@ -42,4 +42,6 @@ interface IMessageRepository {
     suspend fun sendSeenMarkerForMessage(externalMessageId: String): CallResult<Boolean>
     suspend fun updateMessage(message: MessageEntity)
 
+    suspend fun updateAttachment(messageId: String, attachment: Attachment)
+
 }

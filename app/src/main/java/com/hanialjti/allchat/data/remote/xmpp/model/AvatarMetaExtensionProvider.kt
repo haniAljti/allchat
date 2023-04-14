@@ -19,6 +19,7 @@ class AvatarMetaDataExtensionProvider: EmbeddedExtensionProvider<AvatarMetaDataE
         return AvatarMetaDataExtensionElement(
             bytes = attributes?.get(AvatarMetaDataExtensionElement.ATTR_BYTES)?.toInt() ?: 0,
             id = attributes?.get(AvatarMetaDataExtensionElement.ATTR_ID) ?: "",
+            url = attributes?.get(AvatarMetaDataExtensionElement.ATTR_URL),
             height = attributes?.get(AvatarMetaDataExtensionElement.ATTR_HEIGHT)?.toInt() ?: 96,
             width = attributes?.get(AvatarMetaDataExtensionElement.ATTR_WIDTH)?.toInt() ?: 96,
             type = attributes?.get(AvatarMetaDataExtensionElement.ATTR_TYPE) ?: "image/png",

@@ -1,30 +1,28 @@
 package com.hanialjti.allchat.presentation.component
 
+import androidx.annotation.DrawableRes
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.CircularProgressIndicator
-import androidx.compose.material.Icon
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
-import androidx.compose.material3.Text
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.vectorResource
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.hanialjti.allchat.R
 import com.hanialjti.allchat.data.model.Media
 import com.hanialjti.allchat.data.remote.model.DownloadProgress
-import com.hanialjti.allchat.presentation.chat.AudioPlayBackButton
 import com.hanialjti.allchat.presentation.chat.rememberAudioControllerState
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalAnimationApi::class, ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AudioAttachment(
     recording: Media,
@@ -32,7 +30,9 @@ fun AudioAttachment(
     onResumeAudio: (Int) -> Unit,
     onPauseAudio: () -> Unit,
     isActiveMessage: Boolean,           // Helps to stop other recordings from playing
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    containerColor: Color,
+    contentColor: Color
 ) {
 
     val audioControllerState = rememberAudioControllerState(
@@ -70,7 +70,10 @@ fun AudioAttachment(
             transitionSpec = { scaleIn() with scaleOut() }
         ) {
             val buttonModifier = Modifier
-                .background(color = Color(0x4D191D18), shape = RoundedCornerShape(15.dp))
+                .background(
+                    color = MaterialTheme.colorScheme.outline,
+                    shape = RoundedCornerShape(15.dp)
+                )
                 .size(45.dp)
             when (it) {
                 RecordingStatus.NotDownloaded -> {
@@ -78,7 +81,8 @@ fun AudioAttachment(
                         Icon(
                             painter = painterResource(id = R.drawable.ic_down),
                             contentDescription = null,
-                            modifier = Modifier.padding(10.dp)
+                            modifier = Modifier.padding(10.dp),
+                            tint = MaterialTheme.colorScheme.onSecondaryContainer
                         )
                     }
                 }
@@ -126,7 +130,9 @@ fun AudioAttachment(
                 sliderValue = it
             },
             colors = SliderDefaults.colors(
-                activeTrackColor = Color(0xFF191D18)
+                activeTrackColor = MaterialTheme.colorScheme.background,
+                inactiveTrackColor = MaterialTheme.colorScheme.outline,
+                thumbColor = MaterialTheme.colorScheme.tertiary
             ),
             modifier = Modifier.weight(1f),
             valueRange = 0f..(recording.duration?.toFloat() ?: 0f),
@@ -134,14 +140,17 @@ fun AudioAttachment(
                 Box(
                     modifier = Modifier
                         .padding(15.dp)
-                        .background(Color.White, shape = RoundedCornerShape(50))
+                        .background(
+                            MaterialTheme.colorScheme.tertiaryContainer,
+                            shape = RoundedCornerShape(50)
+                        )
                         .width(5.dp)
                         .height(10.dp)
                 )
             }
         )
 
-        Text(text = durationString, color = Color.White)
+        Text(text = durationString, color = contentColor)
 
 
 //        AndroidView(
@@ -198,6 +207,44 @@ fun AudioAttachment(
 //        )
     }
 
+}
+
+@Composable
+fun AudioPlayBackButton(
+    @DrawableRes imageRes: Int,
+    modifier: Modifier = Modifier,
+    onButtonClicked: () -> Unit,
+) {
+    IconButton(onClick = onButtonClicked, modifier = modifier) {
+        Icon(
+            imageVector = ImageVector
+                .vectorResource(id = imageRes),
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.surface,
+            modifier = Modifier.size(18.dp)
+        )
+    }
+}
+
+@Preview
+@Composable
+fun AudioAttachmentPreview() {
+    AudioAttachment(
+        recording = Media(
+            com.hanialjti.allchat.data.model.Attachment.Type.Audio,
+            null,
+            null,
+            null,
+            5000,
+            null
+        ),
+        downloadProgress = null,
+        onResumeAudio = {},
+        onPauseAudio = { /*TODO*/ },
+        isActiveMessage = false,
+        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+    )
 }
 
 private enum class RecordingStatus { NotDownloaded, Downloading, Ready, Playing }

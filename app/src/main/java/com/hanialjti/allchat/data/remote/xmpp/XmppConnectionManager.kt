@@ -183,6 +183,32 @@ class XmppConnectionManager(
             .build()
 
         try {
+            when (presence.type) {
+                Presence.Type.Available -> {
+                    connection.addConnectionListener(this@XmppConnectionManager)
+                    if (config.useForegroundService && ClientStateIndicationManager.isSupported(
+                            connection
+                        )
+                    ) {
+                        ClientStateIndicationManager.active(connection)
+                    }
+                }
+                Presence.Type.Unavailable -> {
+                    reconnectionManager.disableAutomaticReconnection()
+                    connection.removeConnectionListener(this@XmppConnectionManager)
+                    if (config.useForegroundService && ClientStateIndicationManager.isSupported(
+                            connection
+                        )
+                    ) {
+                        ClientStateIndicationManager.inactive(connection)
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Logger.e(e)
+        }
+
+        try {
             connection.sendStanza(presenceStanza)
         } catch (e: SmackException.NotConnectedException) {
             Timber.e(e)
@@ -261,10 +287,12 @@ class XmppConnectionManager(
                         if (!isConnected) {
                             connect()
                         }
-                        login(
-                            userCredentials.username,
-                            userCredentials.password
-                        )
+                        if (!isAuthenticated) {
+                            login(
+                                userCredentials.username,
+                                userCredentials.password
+                            )
+                        }
                     }
                     if (carbonManager.isSupportedByServer) {
                         carbonManager.enableCarbons()
@@ -322,6 +350,7 @@ class XmppConnectionManager(
         Logger.d { "Connection is closed" }
         externalScope.launch { xmppClientDataSource.updateIsAuthenticated(false) }
     }
+
     override fun authenticated(connection: XMPPConnection?, resumed: Boolean) {
         Logger.d { "Connection is authenticated!" }
         externalScope.launch { xmppClientDataSource.updateIsAuthenticated(true) }

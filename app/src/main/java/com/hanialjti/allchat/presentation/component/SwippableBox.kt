@@ -1,12 +1,13 @@
 package com.hanialjti.allchat.presentation.component
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.Orientation
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material.FractionalThreshold
 import androidx.compose.material.rememberSwipeableState
 import androidx.compose.material.swipeable
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -27,7 +28,9 @@ import kotlin.math.roundToInt
 @Composable
 fun SwipeableBox(
     modifier: Modifier = Modifier,
-    onSwipe: () -> Unit,
+    onLeftSwipe: () -> Unit = {},
+    onRightSwipe: () -> Unit = {},
+    allowedSwipeDirection: SwipeDirection,
     hiddenContent: @Composable () -> Unit,
     swipableContent: @Composable () -> Unit
 ) {
@@ -38,22 +41,36 @@ fun SwipeableBox(
     val swipeableState = rememberSwipeableState(SwipeState.Original)
     val scope = rememberCoroutineScope()
     val haptic = LocalHapticFeedback.current
+    val anchors = mutableMapOf(0f to SwipeState.Original)
+
+    when (allowedSwipeDirection) {
+        SwipeDirection.LEFT -> anchors[sizePx] = SwipeState.Left
+        SwipeDirection.RIGHT -> anchors[-sizePx] = SwipeState.Right
+        SwipeDirection.LEFT_AND_RIGHT -> {
+            anchors[sizePx] = SwipeState.Left
+            anchors[-sizePx] = SwipeState.Right
+        }
+    }
 
     if (swipeableState.isAnimationRunning) {
         DisposableEffect(Unit) {
             onDispose {
                 Logger.d { swipeableState.currentValue.toString() }
-                if (swipeableState.currentValue == SwipeState.Left) {
-                    scope.launch {
+                when (swipeableState.currentValue) {
+                    SwipeState.Left -> scope.launch {
                         swipeableState.animateTo(SwipeState.Original)
-                        onSwipe()
+                        onLeftSwipe()
                     }
+                    SwipeState.Right -> scope.launch {
+                        swipeableState.animateTo(SwipeState.Original)
+                        onRightSwipe()
+                    }
+                    else -> {}
                 }
             }
         }
     }
 
-    val anchors = mapOf(0f to SwipeState.Original, sizePx to SwipeState.Left)
 
     val thresholdReached by remember {
         derivedStateOf {
@@ -80,24 +97,27 @@ fun SwipeableBox(
             orientation = Orientation.Horizontal
         )
 
-    Row(modifier = boxModifier, verticalAlignment = Alignment.CenterVertically) {
+    Box(modifier = boxModifier) {
+
         Box(
-            modifier = Modifier.offset {
-                IntOffset(swipeableState.offset.value.roundToInt() - 50.dp.roundToPx(), 0)
-            }
+            modifier = Modifier
+                .align(Alignment.CenterStart)
+                .padding(horizontal = 10.dp)
+                .background(MaterialTheme.colorScheme.surfaceVariant)
         ) {
             hiddenContent()
         }
-        Box(
-            modifier = Modifier.offset {
-                IntOffset(swipeableState.offset.value.roundToInt(), 0)
-            }
+
+        Box(modifier = Modifier
+            .background(MaterialTheme.colorScheme.background)
+            .offset { IntOffset(swipeableState.offset.value.roundToInt(), 0) }
         ) {
             swipableContent()
         }
-    }
 
+    }
 
 }
 
 private enum class SwipeState { Left, Original, Right }
+enum class SwipeDirection { LEFT, RIGHT, LEFT_AND_RIGHT }

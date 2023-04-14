@@ -100,7 +100,8 @@ class Converters {
     @TypeConverter
     fun toRole(roleValue: Int?) = when (roleValue) {
         0 -> Role.Participant
-        else -> Role.Admin
+        1 -> Role.Admin
+        else -> Role.Owner
     }
 
     @TypeConverter

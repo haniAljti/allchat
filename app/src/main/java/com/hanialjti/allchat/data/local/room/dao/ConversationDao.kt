@@ -5,10 +5,10 @@ import androidx.room.*
 import androidx.room.OnConflictStrategy.Companion.REPLACE
 import com.hanialjti.allchat.data.local.room.entity.ChatEntity
 import com.hanialjti.allchat.data.local.room.entity.ParticipantEntity
-import com.hanialjti.allchat.data.local.room.model.Chat
+import com.hanialjti.allchat.data.local.room.model.ChatDetailsEntity
 import com.hanialjti.allchat.data.local.room.model.ChatWithLastMessage
-import com.hanialjti.allchat.data.model.ChatInfo
 import kotlinx.coroutines.flow.Flow
+import java.time.OffsetDateTime
 
 @Dao
 interface ConversationDao {
@@ -23,7 +23,6 @@ interface ConversationDao {
                c.owner                                                       as chat_owner,
                c.is_group_chat                                               as chat_is_group_chat,
                c.unread_messages_count                                       as chat_unread_messages_count,
-               c.participants                                                as chat_participants,
                u.is_online                                                   as user_is_online,
                u.id                                                          as user_id,
                a.nickname                                                    as nickname,
@@ -50,13 +49,13 @@ interface ConversationDao {
     @Transaction
     @Query(
         """
-        SELECT c.id                                                          as chat_id,
-               c.owner                                                       as chat_owner,
-               c.is_group_chat                                               as chat_is_group_chat,
-               c.unread_messages_count                                       as chat_unread_messages_count,
-               c.participants                                                as chat_participants,
-               u.is_online                                                   as user_is_online,
+        SELECT c.id                                                          as id,
+               c.is_group_chat                                               as isGroupChat,
+               c.description                                                 as description,
+               c.created_at                                                  as createdAt,
+               u.is_online                                                   as isOnline,
                u.id                                                          as user_id,
+               u.status                                                      as status,
                a.nickname                                                    as nickname,
                a.avatar_path                                                 as avatar
         FROM chats c
@@ -65,7 +64,7 @@ interface ConversationDao {
         WHERE c.owner = :owner AND c.id = :chatId
         """
     )
-    fun getChatInfo(owner: String, chatId: String): Flow<Chat?>
+    fun getChatInfo(owner: String, chatId: String): Flow<ChatDetailsEntity?>
 
     @Transaction
     @Query(
@@ -74,7 +73,6 @@ interface ConversationDao {
          c.owner as chat_owner,
          c.is_group_chat as chat_is_group_chat,
          c.unread_messages_count as chat_unread_messages_count,
-         c.participants as chat_participants,
          u.is_online as user_is_online,
          u.id as user_id,
          a.nickname as nickname,
@@ -93,51 +91,14 @@ interface ConversationDao {
     @Query("SELECT * FROM chats WHERE id = :remoteId")
     suspend fun getConversationByRemoteId(remoteId: String?): ChatEntity?
 
-    @Query("SELECT * FROM chats WHERE id = :chatId AND owner = :owner")
-    suspend fun getOne(chatId: String, owner: String): ChatEntity?
-
     @Query("UPDATE chats SET unread_messages_count = 0 WHERE id = :conversationId")
     suspend fun resetUnreadCounter(conversationId: String)
-
-    @Query("SELECT * FROM chats WHERE id = :id")
-    fun getFlowById(id: String): Flow<ChatEntity>
 
     @Insert(onConflict = REPLACE)
     suspend fun insert(vararg conversationEntity: ChatEntity): List<Long>
 
-    @Update(onConflict = REPLACE)
-    suspend fun update(vararg conversationEntity: ChatEntity)
+    @Query("UPDATE chats SET description = :description, created_at = :createdAt WHERE id = :chatId")
+    suspend fun updateDescription(chatId: String, description: String?, createdAt: OffsetDateTime?)
 
-    @Transaction
-    suspend fun insertOrIgnore(conversationEntity: ChatEntity) {
-        val existingConversation = getConversationByRemoteId(conversationEntity.id)
-
-        if (existingConversation == null) {
-            insert(conversationEntity)
-        }
-    }
-
-    @Insert
-    suspend fun insertParticipants(vararg participant: ParticipantEntity)
-
-    @Query("SELECT COUNT(*) FROM PARTICIPANTS WHERE chat_id = :chatId")
-    suspend fun getParticipantCountForChat(chatId: String): Int
-
-//    @Transaction
-//    suspend fun upsert(vararg conversationEntities: ChatEntity) = insert(*conversationEntities)
-//        .withIndex()
-//        .filter { it.value == -1L }
-//        .forEach {
-//            val conversation = conversationEntities[it.index]
-//            updateConversationInfo(
-//                ConversationInfoEntity(
-//                    id = conversation.id,
-//                    externalId = conversation.externalId,
-//                    name = conversation.name,
-//                    image = conversation.image,
-//                    from = conversation.owner
-//                )
-//            )
-//        }
 
 }

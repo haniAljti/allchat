@@ -28,6 +28,9 @@ class PreferencesLocalDataStore(
     val usernameStream = userPreferences
         .map { it.loggedInUser }
 
+    val isChatsSyncedStream = userPreferences
+        .map { it.isSynced }
+
     suspend fun username() = usernameStream.first()
 
     suspend fun updateUserCredentials(userCredentials: UserCredentials?) = context.dataStore
@@ -38,4 +41,7 @@ class PreferencesLocalDataStore(
 
     suspend fun updateLoggedInUser(user: String?) = context.dataStore
         .updateData { it.copy(loggedInUser = user) }
+
+    suspend fun updateIsSynced(isSynced: Boolean) = context.dataStore
+        .updateData { it.copy(isSynced = isSynced) }
 }

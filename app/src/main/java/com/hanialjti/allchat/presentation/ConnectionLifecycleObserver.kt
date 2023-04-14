@@ -4,20 +4,16 @@ import android.app.Activity
 import android.content.Intent
 import androidx.lifecycle.*
 import com.hanialjti.allchat.common.utils.ApplicationUtils
-import com.hanialjti.allchat.data.repository.AuthenticationRepository
-import com.hanialjti.allchat.data.repository.ConversationRepository
-import com.hanialjti.allchat.data.repository.InfoRepository
-import com.hanialjti.allchat.data.repository.UserRepository
+import com.hanialjti.allchat.data.repository.*
 import com.hanialjti.allchat.data.tasks.ChatForegroundService
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import timber.log.Timber
 
 class ConnectionLifeCycleObserver(
-    private val authenticationRepository: AuthenticationRepository,
+    private val authenticationRepository: AuthRepository,
     private val conversationRepository: ConversationRepository,
-    private val userRepository: UserRepository,
-    private val infoRepository: InfoRepository
+    private val userRepository: UserRepository
 ) : DefaultLifecycleObserver {
 
     private var isBackgroundServiceRunning = false
@@ -36,15 +32,21 @@ class ConnectionLifeCycleObserver(
         }
         owner.lifecycleScope.launch {
             owner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                userRepository.listenForUserUpdates()
+                userRepository.userUpdatesStream().collect()
             }
         }
-        owner.lifecycleScope.launch {
-            owner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                Timber.d("listening for info updates...")
-                infoRepository.nicknameStream().collect()
-            }
-        }
+//        owner.lifecycleScope.launch {
+//            owner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+//                Timber.d("listening for info updates...")
+//                infoRepository.nicknameStream().collect()
+//            }
+//        }
+//        owner.lifecycleScope.launch {
+//            owner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+//                Timber.d("listening for participant updates...")
+//                participantRepository.participantUpdateStream.collect()
+//            }
+//        }
     }
 
     override fun onStart(owner: LifecycleOwner) {

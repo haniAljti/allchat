@@ -32,8 +32,7 @@ import coil.request.ImageRequest
 import com.hanialjti.allchat.R
 import com.hanialjti.allchat.data.model.User
 import com.hanialjti.allchat.di.getViewModel
-import com.hanialjti.allchat.presentation.component.TopBarBackButton
-import com.hanialjti.allchat.presentation.ui.theme.Green
+import com.hanialjti.allchat.presentation.component.TopBar
 import org.koin.core.parameter.parametersOf
 
 @Composable
@@ -77,8 +76,12 @@ fun SelectableUsers(
 ) {
     Box(modifier = modifier) {
         Column {
-            TopBarBackButton(title) {
-                onBackPressed()
+            TopBar(
+                title = title,
+                onBackClicked = {
+                    onBackPressed()
+                }
+            ) {
             }
 
             SelectableUsersList(
@@ -144,9 +147,7 @@ fun SelectableUser(
 
         Box(modifier = Modifier) {
 
-            user.avatar?.AsImage(Modifier.size(60.dp))
-//            UserImage(image = user.avatar?.data, modifier = Modifier.size(60.dp))
-//            user.image?.AsImage(modifier = Modifier.size(60.dp))
+            user.avatar.AsImage(Modifier.size(60.dp))
 
             androidx.compose.animation.AnimatedVisibility(
                 visible = user.isOnline,
@@ -159,7 +160,7 @@ fun SelectableUser(
                         .size(24.dp)
                         .clip(CircleShape)
                         .border(3.dp, MaterialTheme.colors.primary, CircleShape)
-                        .background(Green)
+                        .background(androidx.compose.material3.MaterialTheme.colorScheme.primary)
                 )
             }
         }
@@ -236,7 +237,7 @@ fun AnimatedCheckBox(
         updateTransition(targetState = isChecked, label = "")
 
     val recordButtonColor by transition.animateColor(label = "") { recording ->
-        if (recording) Green else Color.Transparent
+        if (recording) androidx.compose.material3.MaterialTheme.colorScheme.primary else Color.Transparent
     }
 
     Box(

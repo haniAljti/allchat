@@ -5,6 +5,8 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy.Companion.REPLACE
 import androidx.room.Query
 import com.hanialjti.allchat.data.local.room.entity.InfoEntity
+import com.hanialjti.allchat.data.local.room.model.ParticipantInfo
+import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface InfoDao {
@@ -23,4 +25,20 @@ interface InfoDao {
 
     @Query("SELECT * FROM entity_info WHERE id = :id")
     suspend fun getOne(id: String): InfoEntity?
+
+    @Query(
+        """
+        SELECT p.chat_id     AS chatId,
+               p.user_id     AS userId,
+               p.state       AS state,
+               p.role        AS role,
+               i.nickname    AS nickname,
+               i.avatar_path AS cachePath
+        FROM   entity_info i,
+               participants p
+        WHERE  i.id = p.user_id
+               AND p.chat_id = :chatId
+        """
+    )
+    fun getParticipantsInfo(chatId: String): Flow<List<ParticipantInfo>>
 }

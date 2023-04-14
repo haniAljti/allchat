@@ -2,14 +2,13 @@ package com.hanialjti.allchat.presentation.component
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.CircularProgressIndicator
 import androidx.compose.material.Icon
-import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Text
-import androidx.compose.runtime.*
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -20,6 +19,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.request.ImageRequest
 import com.hanialjti.allchat.R
 import com.hanialjti.allchat.data.model.Attachment
 import com.hanialjti.allchat.data.model.MessageItem
@@ -119,7 +119,9 @@ fun SentMessage(
     onPdfClicked: () -> Unit,
     modifier: Modifier = Modifier,
     onReplyClicked: () -> Unit,
-    isActiveMessage: Boolean
+    isActiveMessage: Boolean,
+    contentColor: Color,
+    containerColor: Color,
 ) {
     Box(
         modifier = modifier
@@ -128,11 +130,10 @@ fun SentMessage(
         Column(
             modifier = Modifier
                 .widthIn(100.dp, 350.dp)
-                .width(IntrinsicSize.Max)
                 .align(Alignment.BottomEnd)
                 .padding(end = 20.dp)
                 .background(
-                    color = Color(0xFF3E5A55),
+                    color = containerColor,
                     shape = RoundedCornerShape(20.dp)
                 ),
             horizontalAlignment = Alignment.End,
@@ -140,9 +141,10 @@ fun SentMessage(
         ) {
 
             message.replyTo?.let {
-                ReplyingTo(message = it, modifier = Modifier
-                    .padding(horizontal = 10.dp).padding(top = 10.dp)
-                    .align(Alignment.Start)) {
+                ReplyingTo(
+                    message = it,
+                    modifier = Modifier.align(Alignment.Start)
+                ) {
                     onReplyClicked()
                 }
             }
@@ -151,12 +153,14 @@ fun SentMessage(
                 Attachment(
                     attachment = it,
                     downloadProgress = downloadProgress,
-                    modifier = modifier.clip(RoundedCornerShape(20.dp)),
+                    modifier = modifier,
                     onResumeAudio = onResumeAudio,
                     onPauseAudio = onPauseAudio,
                     onImageClicked = onImageClicked,
                     onPdfClicked = onPdfClicked,
-                    isActiveMessage = isActiveMessage
+                    isActiveMessage = isActiveMessage,
+                    contentColor = contentColor,
+                    containerColor = containerColor
                 ) {
                     if (message.body.isNullOrEmpty()) {
                         StatusAndTime(message = message, uploadProgress = uploadProgress)
@@ -167,7 +171,7 @@ fun SentMessage(
             if (!message.body.isNullOrEmpty()) {
                 Text(
                     text = message.body,
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.onSecondary,
                     textAlign = TextAlign.Start,
                     modifier = Modifier
                         .align(Alignment.Start)
@@ -185,24 +189,39 @@ fun SentMessage(
 }
 
 @Composable
-fun ReplyingTo(message: ReplyingToMessage, modifier: Modifier = Modifier, onClicked: () -> Unit) {
-    Row(modifier = modifier.fillMaxWidth().clickable { onClicked() }) {
-        Spacer(
-            modifier = Modifier
-                .padding(end = 3.dp)
-                .clip(RoundedCornerShape(50))
-                .background(Color.Green)
-                .width(5.dp)
-                .height(55.dp)
-        )
-        Column {
-            message.senderName?.let {
-                Text(text = it)
-            }
-            message.body?.let {
-                Text(text = it, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            } ?: message.attachment?.let {
-                Text(text = it.type.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
+fun ReplyingTo(
+    message: ReplyingToMessage,
+    modifier: Modifier = Modifier,
+    onClicked: () -> Unit
+) {
+    Box(modifier = modifier
+        .padding(5.dp)
+        .clip(RoundedCornerShape(15.dp))
+        .background(MaterialTheme.colorScheme.secondaryContainer)
+        .clickable { onClicked() }
+    ) {
+
+        Row(
+            modifier = modifier
+                .drawAccent(MaterialTheme.colorScheme.tertiary, 0.dp)
+                .padding(10.dp)
+        ) {
+            Column {
+                Text(
+                    text = message.senderName ?: "Me",
+                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                )
+                message.body?.let {
+                    Text(
+                        text = it,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.fillMaxWidth(),
+                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                } ?: message.attachment?.let {
+                    Text(text = it.type.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
             }
         }
     }
@@ -217,9 +236,9 @@ fun StatusAndTime(message: MessageItem.MessageData, uploadProgress: UploadProgre
     ) {
         Text(
             text = message.time,
-            color = MaterialTheme.colors.primary,
+            color = MaterialTheme.colorScheme.onSecondary,
             fontSize = 12.sp,
-            modifier = Modifier.alpha(0.6f)
+            modifier = Modifier.alpha(1f)
         )
         Spacer(modifier = Modifier.width(3.dp))
         if (uploadProgress != null && !uploadProgress.isUploaded) {
@@ -245,35 +264,35 @@ fun MessageStatusIcon(messageStatus: MessageStatus, modifier: Modifier = Modifie
         MessageStatus.Pending -> {
             MessageStatusIcon(
                 iconRes = R.drawable.ic_pending,
-                tint = MaterialTheme.colors.primary,
+                tint = MaterialTheme.colorScheme.primaryContainer,
                 modifier = modifier
             )
         }
         MessageStatus.Sent -> {
             MessageStatusIcon(
                 iconRes = R.drawable.ic_sent,
-                tint = MaterialTheme.colors.primary,
+                tint = MaterialTheme.colorScheme.primaryContainer,
                 modifier = modifier
             )
         }
         MessageStatus.Delivered -> {
             MessageStatusIcon(
                 iconRes = R.drawable.ic_acknowledged,
-                tint = MaterialTheme.colors.primary,
+                tint = MaterialTheme.colorScheme.primaryContainer,
                 modifier = modifier
             )
         }
         MessageStatus.Seen -> {
             MessageStatusIcon(
                 iconRes = R.drawable.ic_acknowledged,
-                tint = Color(0xFF26DBB5),
+                tint = MaterialTheme.colorScheme.primaryContainer,
                 modifier = modifier
             )
         }
         MessageStatus.Error -> {
             MessageStatusIcon(
                 iconRes = R.drawable.ic_error,
-                tint = Color.Red,
+                tint = MaterialTheme.colorScheme.error,
                 modifier = modifier
             )
         }

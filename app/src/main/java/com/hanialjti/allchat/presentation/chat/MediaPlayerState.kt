@@ -13,8 +13,6 @@ class MediaPlayerState(
     private val coroutine: CoroutineScope
 ) {
 
-//    private var playing: String? = null
-
     var activeRecording: Media? by mutableStateOf(null)
         private set
 

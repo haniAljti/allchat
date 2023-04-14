@@ -3,6 +3,7 @@ package com.hanialjti.allchat.data.local.room.entity
 import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
+import com.hanialjti.allchat.common.utils.KOffsetDateTimeSerializer
 import com.hanialjti.allchat.common.utils.dateAsString
 import com.hanialjti.allchat.common.utils.timeAsString
 import com.hanialjti.allchat.data.model.*
@@ -55,34 +56,18 @@ data class MessageMarker(
     val timestamp: OffsetDateTime = OffsetDateTime.now()
 )
 
-@OptIn(ExperimentalSerializationApi::class)
-@Serializer(forClass = OffsetDateTime::class)
-object KOffsetDateTimeSerializer : KSerializer<OffsetDateTime> {
-    override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("OffsetDateTime", PrimitiveKind.STRING)
-
-    override fun serialize(encoder: Encoder, value: OffsetDateTime) {
-        val format = DateTimeFormatter.ISO_OFFSET_DATE_TIME
-
-        val string = format.format(value)
-        encoder.encodeString(string)
-    }
-
-    override fun deserialize(decoder: Decoder): OffsetDateTime {
-        val string = decoder.decodeString()
-        return OffsetDateTime.parse(string)
-    }
+fun MessageEntity.asNetworkMessage() = contactId?.let {
+    RemoteMessage(
+        id = id,
+        body = body,
+        timestamp = timestamp,
+        chatId = contactId,
+        sender = senderId,
+        messageStatus = status,
+        type = type,
+        messageArchiveId = archiveId
+    )
 }
-
-fun MessageEntity.asNetworkMessage() = RemoteMessage(
-    id = id,
-    body = body,
-    timestamp = timestamp,
-    chatId = contactId,
-    sender = senderId,
-    messageStatus = status,
-    type = type,
-    messageArchiveId = archiveId
-)
 
 
 fun MessageStatus?.hasLesserValueThan(otherStatus: MessageStatus?) =

@@ -4,35 +4,29 @@ import android.Manifest
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
-import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.annotation.DrawableRes
-import androidx.annotation.RequiresApi
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.*
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.res.vectorResource
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -48,7 +42,6 @@ import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.PermissionStatus
 import com.google.accompanist.permissions.rememberPermissionState
 import com.hanialjti.allchat.R
-import com.hanialjti.allchat.common.utils.*
 import com.hanialjti.allchat.data.model.Attachment
 import com.hanialjti.allchat.data.model.Media
 import com.hanialjti.allchat.data.model.MessageItem
@@ -59,31 +52,28 @@ import com.hanialjti.allchat.di.getViewModel
 import com.hanialjti.allchat.presentation.component.*
 import com.hanialjti.allchat.presentation.conversation.ContactImage
 import com.hanialjti.allchat.presentation.preview_attachment.PreviewAndSendAttachment
+import com.hanialjti.allchat.presentation.ui.toChatDetailsScreen
 import com.hanialjti.allchat.presentation.ui.toImagePreviewScreen
-import com.hanialjti.allchat.presentation.ui.toInfoScreen
 import com.hanialjti.allchat.presentation.ui.toInviteUsersScreen
+import com.hanialjti.allchat.presentation.ui.toUserDetailsScreen
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.koin.core.parameter.parametersOf
 import java.io.File
 
 
-@RequiresApi(Build.VERSION_CODES.Q)
 @OptIn(
-    ExperimentalPermissionsApi::class,
-    ExperimentalAnimationApi::class
+    ExperimentalPermissionsApi::class
 )
 @Composable
 fun ChatScreen(
-    navController: NavHostController,
     contactId: String,
-    isGroupChat: Boolean,
-    viewModel: ChatViewModel = getViewModel(parameters = { parametersOf(contactId, isGroupChat) })
+    navController: NavHostController,
+    viewModel: ChatViewModel = getViewModel(parameters = { parametersOf(contactId) })
 ) {
 
     val uiState by viewModel.uiState.collectAsState()
     val messages = viewModel.messages.collectAsLazyPagingItems()
-    var showChatMenu by remember { mutableStateOf(false) }
 
     val coroutine = rememberCoroutineScope()
     val context = LocalContext.current
@@ -151,40 +141,35 @@ fun ChatScreen(
                     status = uiState.status?.asString(),
                     image = uiState.image,
                     onBackClicked = { navController.popBackStack() },
-                    onPersonClicked = { navController.toInfoScreen(contactId) },
-                    onMenuClicked = { showChatMenu = true }
+                    onPersonClicked = {
+                        if (uiState.isGroupChat) navController.toChatDetailsScreen(contactId)
+                        else navController.toUserDetailsScreen(contactId)
+                    },
+                    onMenuClicked = { viewModel.updateIsChatMenuVisible(true) }
                 ) {
                     DropdownMenu(
                         modifier = Modifier
                             .width(200.dp)
                             .background(
-                                color = MaterialTheme.colors.background,
-                                shape = RoundedCornerShape(15.dp)
-                            )
-                            .border(
-                                width = 1.dp,
-                                color = Color.White,
-                                shape = RoundedCornerShape(15.dp)
+                                color = MaterialTheme.colorScheme.surfaceVariant
                             ),
-                        expanded = showChatMenu,
-                        onDismissRequest = { showChatMenu = false }
+                        expanded = uiState.isChatMenuVisible,
+                        onDismissRequest = { viewModel.updateIsChatMenuVisible(false) }
                     ) {
 
-                        if (isGroupChat) {
+                        if (uiState.isGroupChat) {
                             DropdownMenuItem(
-                                onClick = { navController.toInviteUsersScreen(contactId) }
-                            ) {
-                                Text("Invite Users")
-                            }
+                                onClick = { navController.toInviteUsersScreen(contactId) },
+                                text = { Text("Invite Users") }
+                            )
                         } else {
                             DropdownMenuItem(
                                 onClick = {
                                     if (uiState.isBlocked) viewModel.unblockUser()
                                     else viewModel.blockUser()
-                                }
-                            ) {
-                                Text(if (uiState.isBlocked) "Unblock user" else "Block user")
-                            }
+                                },
+                                text = { Text(if (uiState.isBlocked) "Unblock user" else "Block user") }
+                            )
                         }
 
                     }
@@ -193,8 +178,8 @@ fun ChatScreen(
                 MessagesList(
                     messages = messages,
                     messageListState = messages.rememberLazyListState(),
-                    uploadProgress = uiState.uploadProgresses,
-                    downloadProgress = uiState.downloadProgresses,
+                    uploadProgressMap = uiState.uploadProgresses,
+                    downloadProgressMap = uiState.downloadProgresses,
                     modifier = Modifier
                         .fillMaxSize()
                         .weight(1f),
@@ -229,8 +214,7 @@ fun ChatScreen(
             TextInput(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .align(Alignment.BottomEnd)
-                    .background(Color(0xFF111A14)),
+                    .align(Alignment.BottomEnd),
                 message = uiState.textInput,
                 attachment = uiState.attachment,
                 onMessageChanged = viewModel::updateTextInput,
@@ -378,13 +362,13 @@ private fun Context.openDocumentWithChooser(
 }
 
 
-@OptIn(ExperimentalFoundationApi::class, ExperimentalAnimationApi::class)
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun MessagesList(
     messages: LazyPagingItems<MessageItem>,
     messageListState: LazyListState,
-    uploadProgress: Map<Any, UploadProgress>,
-    downloadProgress: Map<Any, DownloadProgress>,
+    uploadProgressMap: Map<Any, UploadProgress>,
+    downloadProgressMap: Map<Any, DownloadProgress>,
     modifier: Modifier = Modifier,
     onResumeAudio: (MessageItem.MessageData, seekValue: Int) -> Unit,
     onPauseAudio: (Media) -> Unit,
@@ -395,7 +379,7 @@ fun MessagesList(
     lastReadMessage: (MessageItem.MessageData) -> Unit
 ) {
 
-    val coroutine = rememberCoroutineScope()
+    val scope = rememberCoroutineScope()
 
     val lastMessageNotSentByMe: MessageItem.MessageData? by remember(messages) {
         derivedStateOf { messages.itemSnapshotList.firstOrNull { it is MessageItem.MessageData && !it.isFromMe() } as? MessageItem.MessageData }
@@ -419,16 +403,26 @@ fun MessagesList(
     }
 
     var flashColor by remember { mutableStateOf(false) }
-    val infiniteTransition =
-        animateColorAsState(
-            if (flashColor) Color.White.copy(alpha = 0.5f) else Color.Transparent,
-            animationSpec = tween(1000, easing = LinearEasing)
+//    val infiniteTransition = animateColorAsState(
+//        if (flashColor) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f) else Color.Transparent,
+//        animationSpec = tween(1000, easing = LinearEasing)
+//    )
+
+    val infiniteTransition = rememberInfiniteTransition()
+    val color by infiniteTransition.animateColor(
+        initialValue = MaterialTheme.colorScheme.background,
+        targetValue = MaterialTheme.colorScheme.surfaceVariant,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1000, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
         )
+    )
+
     var flashMessage by remember { mutableStateOf(-1) }
 
     if (flashColor) {
         LaunchedEffect(Unit) {
-            coroutine.launch {
+            scope.launch {
                 delay(2000)
                 flashColor = false
             }
@@ -446,11 +440,7 @@ fun MessagesList(
 
             items(
                 items = messages,
-                key = { messageItem ->
-//                    val message = messages[index]
-//                    message?.itemId ?: index
-                    messageItem.itemId ?: messageItem
-                }
+                key = { messageItem -> messageItem.itemId ?: messageItem }
             ) { message ->
                 when (message) {
                     null -> PlaceHolderMessage()
@@ -458,9 +448,15 @@ fun MessagesList(
                         val index by remember {
                             derivedStateOf { messages.itemSnapshotList.indexOf(message) }
                         }
-                        val nextMessage =
-                            if (index < messages.itemCount.minus(1)) messages[index + 1] else null
-                        val previousMessage = if (index > 0) messages[index - 1] else null
+                        val nextMessage by remember {
+                            derivedStateOf {
+                                if (index < messages.itemCount.minus(1)) messages[index + 1]
+                                else null
+                            }
+                        }
+                        val previousMessage by remember {
+                            derivedStateOf { if (index > 0) messages[index - 1] else null }
+                        }
 
                         SwipeableBox(
                             modifier = Modifier
@@ -470,49 +466,48 @@ fun MessagesList(
                                         currentMessage = message
                                     )
                                 )
-                                .background(if (flashMessage == index) infiniteTransition.value else Color.Transparent)
+//                                .background()
                                 .animateItemPlacement(),
                             hiddenContent = {
-                                Box(
+                                Icon(
+                                    painter = painterResource(id = R.drawable.ic_reply),
                                     modifier = Modifier
-                                        .size(40.dp)
-                                        .clip(CircleShape)
-                                        .background(Color(0xFF3E5A55))
-                                ) {
-                                    Icon(
-                                        painter = painterResource(id = R.drawable.ic_reply),
-                                        modifier = Modifier
-                                            .size(24.dp)
-                                            .align(Alignment.Center),
-                                        tint = Color.White,
-                                        contentDescription = null
-                                    )
-                                }
+                                        .padding(10.dp)
+                                        .align(Alignment.Center),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    contentDescription = null
+                                )
                             },
-                            onSwipe = { replyTo(message) }
+                            onLeftSwipe = { replyTo(message) },
+                            allowedSwipeDirection = SwipeDirection.LEFT
                         ) {
 
-                            val downloadProgress by remember(downloadProgress) {
+                            val messageModifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 50.dp)
+                                .background(MaterialTheme.colorScheme.background)
+
+                            val downloadProgress by remember(downloadProgressMap) {
                                 derivedStateOf {
                                     if (message.attachment is Media)
-                                        downloadProgress[message.id]
+                                        downloadProgressMap[message.id]
                                     else null
                                 }
                             }
 
                             if (message.isFromMe()) {
 
-                                val progress by remember(uploadProgress) {
+                                val uploadProgress by remember(uploadProgressMap) {
                                     derivedStateOf {
                                         if (message.attachment is Media)
-                                            uploadProgress[message.id]
+                                            uploadProgressMap[message.id]
                                         else null
                                     }
                                 }
 
                                 SentMessage(
                                     message = message,
-                                    uploadProgress = progress,
+                                    uploadProgress = uploadProgress,
                                     downloadProgress = downloadProgress,
                                     nextMessage = nextMessage,
                                     previousMessage = previousMessage,
@@ -522,10 +517,10 @@ fun MessagesList(
                                     onPauseAudio = { onPauseAudio(message.attachment as Media) },
                                     onImageClicked = { onImageClicked(message.id) },
                                     onPdfClicked = { onDocumentClicked(message) },
-                                    modifier = Modifier.fillMaxWidth(),
+                                    modifier = messageModifier,
                                     isActiveMessage = currentlyPlaying == message.attachment,
                                     onReplyClicked = {
-                                        coroutine.launch {
+                                        scope.launch {
                                             val replyMessageIndex = messages
                                                 .itemSnapshotList
                                                 .indexOfFirst {
@@ -543,10 +538,12 @@ fun MessagesList(
                                             }
 
                                             flashColor = true
-                                            delay(1000)
-                                            flashColor = false
+//                                            delay(1000)
+//                                            flashColor = false
                                         }
-                                    }
+                                    },
+                                    contentColor = MaterialTheme.colorScheme.onSecondary,
+                                    containerColor = MaterialTheme.colorScheme.secondary
                                 )
                             } else {
                                 ReceivedMessage(
@@ -558,10 +555,10 @@ fun MessagesList(
                                     onPauseAudio = { onPauseAudio(message.attachment as Media) },
                                     onImageClicked = { onImageClicked(message.id) },
                                     onPdfClicked = { onDocumentClicked(message) },
-                                    modifier = Modifier.fillMaxWidth(),
+                                    modifier = messageModifier,
                                     isActiveMessage = currentlyPlaying == message.attachment,
                                     onReplyClicked = {
-                                        coroutine.launch {
+                                        scope.launch {
                                             val replyMessageIndex = messages
                                                 .itemSnapshotList
                                                 .indexOfFirst {
@@ -571,10 +568,12 @@ fun MessagesList(
                                             flashMessage = replyMessageIndex
                                             messageListState.scrollToItem(replyMessageIndex)
                                             flashColor = true
-                                            delay(1000)
-                                            flashColor = false
+//                                            delay(1000)
+//                                            flashColor = false
                                         }
-                                    }
+                                    },
+                                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    containerColor = MaterialTheme.colorScheme.surfaceVariant
                                 )
                             }
 
@@ -588,7 +587,7 @@ fun MessagesList(
                         ) {
                             Text(
                                 text = message.date.asSeparator(),
-                                color = MaterialTheme.colors.primary,
+                                color = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier,
                                 fontSize = 16.sp
                             )
@@ -601,7 +600,7 @@ fun MessagesList(
                                     .padding(10.dp)
                                     .height(1.dp)
                                     .weight(1f)
-                                    .background(MaterialTheme.colors.primary)
+                                    .background(MaterialTheme.colorScheme.onBackground)
                             )
                             Box(
                                 modifier = Modifier
@@ -610,7 +609,7 @@ fun MessagesList(
                             ) {
                                 Text(
                                     text = message.date.asString(),
-                                    color = MaterialTheme.colors.primary,
+                                    color = MaterialTheme.colorScheme.onBackground,
                                     modifier = Modifier,
                                     fontSize = 16.sp
                                 )
@@ -620,7 +619,7 @@ fun MessagesList(
                                     .padding(10.dp)
                                     .height(1.dp)
                                     .weight(1f)
-                                    .background(MaterialTheme.colors.primary)
+                                    .background(MaterialTheme.colorScheme.onBackground)
                             )
                         }
                     }
@@ -649,7 +648,7 @@ fun MessagesList(
                 modifier = Modifier
                     .clip(CircleShape)
                     .background(Color.White),
-                onClick = { coroutine.launch { messageListState.scrollToItem(0) } }
+                onClick = { scope.launch { messageListState.scrollToItem(0) } }
             ) {
                 Icon(
                     painter = painterResource(id = R.drawable.ic_down),
@@ -668,6 +667,7 @@ fun messageTopPadding(lastMessage: MessageItem?, currentMessage: MessageItem?): 
     } else 3.dp
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatTopBar(
     name: String?,
@@ -678,29 +678,17 @@ fun ChatTopBar(
     onMenuClicked: () -> Unit,
     dropDownMenu: @Composable () -> Unit
 ) {
-    TopAppBar(
+    CenterAlignedTopAppBar(
         modifier = Modifier
-            .height(80.dp)
             .fillMaxWidth(),
-        backgroundColor = Color.Transparent,
-        elevation = 0.dp
-    ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
+        title = {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(79.dp)
-                    .padding(PaddingValues(horizontal = 20.dp))
                     .clickable { onPersonClicked() }
             ) {
-                IconButton(onClick = onBackClicked, modifier = Modifier.padding(end = 20.dp)) {
-                    Icon(
-                        painter = painterResource(id = R.drawable.ic_back),
-                        contentDescription = null,
-                        tint = MaterialTheme.colors.primary
-                    )
-                }
+
 
                 image?.AsImage(modifier = Modifier.size(40.dp))
 
@@ -709,68 +697,90 @@ fun ChatTopBar(
                         .weight(1f)
                         .padding(start = 5.dp),
                 ) {
-                    Text(text = name ?: defaultName, color = MaterialTheme.colors.primary)
+                    Text(text = name ?: defaultName, color = MaterialTheme.colorScheme.onSurface)
                     AnimatedVisibility(visible = status != null) {
                         status?.let {
                             Text(
                                 text = it,
-                                color = MaterialTheme.colors.primary,
-                                fontSize = 14.sp
+                                color = MaterialTheme.colorScheme.onSurface,
+                                fontSize = 12.sp
                             )
                         }
                     }
                 }
 
-                Box {
-                    IconButton(onClick = onMenuClicked) {
-                        Icon(
-                            painter = painterResource(id = R.drawable.ic_menu),
-                            contentDescription = null,
-                            modifier = Modifier.padding(20.dp),
-                            tint = MaterialTheme.colors.primary
-                        )
-                    }
-
-                    dropDownMenu()
-                }
             }
-            Spacer(
-                modifier = Modifier
-                    .height(2.dp)
-                    .fillMaxWidth()
-                    .background(MaterialTheme.colors.primary)
-            )
-        }
+        },
+        navigationIcon = {
+            IconButton(onClick = onBackClicked, modifier = Modifier.padding(end = 20.dp)) {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_back),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurface
+                )
+            }
+        },
+        actions = {
+            IconButton(onClick = onMenuClicked) {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_menu),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurface
+                )
+            }
 
-    }
-}
-
-@Composable
-fun AudioPlayBackButton(
-    @DrawableRes imageRes: Int,
-    modifier: Modifier = Modifier,
-    onButtonClicked: () -> Unit,
-) {
-    IconButton(onClick = onButtonClicked, modifier = modifier) {
-        Icon(
-            imageVector = ImageVector
-                .vectorResource(id = imageRes),
-            contentDescription = null,
-            tint = Color.White,
-            modifier = Modifier.size(18.dp)
+            dropDownMenu()
+        },
+        colors = TopAppBarDefaults.largeTopAppBarColors(
+            containerColor = MaterialTheme.colorScheme.surface
         )
-    }
+    )
 }
 
+@Preview
 @Composable
-fun <T : Any> LazyPagingItems<T>.rememberLazyListState(): LazyListState {
-    // After recreation, LazyPagingItems first return 0 items, then the cached items.
-    // This behavior/issue is resetting the LazyListState scroll position.
-    // Below is a workaround. More info: https://issuetracker.google.com/issues/177245496.
-    return when (itemCount) {
-        // Return a different LazyListState instance.
-        0 -> remember(this) { LazyListState(0, 0) }
-        // Return rememberLazyListState (normal case).
-        else -> androidx.compose.foundation.lazy.rememberLazyListState()
-    }
+fun PreviewSentMessage() {
+    SwipeableBox(
+        hiddenContent = {
+            Icon(
+                painter = painterResource(id = R.drawable.ic_reply),
+                modifier = Modifier
+                    .padding(10.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                contentDescription = null
+            )
+        },
+        swipableContent = {
+            SentMessage(
+                message = MessageItem.MessageData(
+                    id = "",
+                    body = "Hello",
+                    date = "12.12.2012",
+                    time = "20:00",
+                    senderId = "",
+                    senderImage = null,
+                    senderName = "sender",
+                    attachment = null
+                ),
+                uploadProgress = null,
+                downloadProgress = null,
+                nextMessage = null,
+                previousMessage = null,
+                onResumeAudio = { },
+                onPauseAudio = { },
+                onImageClicked = { },
+                onPdfClicked = { },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 50.dp)
+                    .background(MaterialTheme.colorScheme.background),
+                isActiveMessage = false,
+                onReplyClicked = { },
+                contentColor = MaterialTheme.colorScheme.onSecondary,
+                containerColor = MaterialTheme.colorScheme.secondary
+            )
+        },
+        onLeftSwipe = { },
+        allowedSwipeDirection = SwipeDirection.LEFT
+    )
 }

@@ -1,6 +1,7 @@
 <resources>
     <string name="app_name">AllChat</string>
     <string name="message_text_field_placeholder">Type a message…</string>
+    <string name="chat_desc_text_field_placeholder">Type a Description…</string>
     <string name="composing">is writing…</string>
     <string name="composing_one">%s is writing…</string>
     <string name="composing_other">%s are writing…</string>
@@ -37,6 +38,12 @@
     <string name="last_month">Last Month</string>
     <string name="last_year">Last Year</string>
     <string name="other_date_pattern">dd/MM/yyyy</string>
+
+    /Authentication
+    <string name="sign_in">Sign In</string>
+    <string name="username">Username</string>
+    <string name="password">Password</string>
+    <string name="sign_in_with">or sign in with:</string>
 
     //Errors
     <string name="invalid_credentials">Invalid username or password</string>

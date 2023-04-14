@@ -5,12 +5,13 @@ import androidx.work.WorkManager
 import com.hanialjti.allchat.data.local.datastore.CryptoManager
 import com.hanialjti.allchat.data.local.datastore.PreferencesLocalDataStore
 import com.hanialjti.allchat.data.local.room.AllChatLocalRoomDatabase
+import com.hanialjti.allchat.data.remote.AllChatSynchronizer
 import com.hanialjti.allchat.data.remote.DefaultFileDownloader
+import com.hanialjti.allchat.data.remote.FileDownloader
 import com.hanialjti.allchat.data.repository.*
 import com.hanialjti.allchat.data.tasks.ConversationTasksDataStore
 import com.hanialjti.allchat.data.tasks.MessageTasksDataSource
 import com.hanialjti.allchat.domain.MessageTasksDataSourceImpl
-import com.hanialjti.allchat.domain.usecase.*
 import com.hanialjti.allchat.domain.worker.CreateChatRoomWorker
 import com.hanialjti.allchat.domain.worker.SendMessageWorker
 import com.hanialjti.allchat.presentation.ConnectionLifeCycleObserver
@@ -22,7 +23,10 @@ import com.hanialjti.allchat.presentation.invite_users.InviteUsersViewModel
 import com.hanialjti.allchat.presentation.preview_attachment.PreviewAttachmentViewModel
 import com.hanialjti.allchat.presentation.viewmodels.AddContactViewModel
 import com.hanialjti.allchat.presentation.authentication.AuthenticationViewModel
-import com.hanialjti.allchat.presentation.viewmodels.EditUserInfoViewModel
+import com.hanialjti.allchat.presentation.chat_entity_details.chat_details.ChatDetailsViewModel
+import com.hanialjti.allchat.presentation.chat_entity_details.chat_details.UpdateChatDetailsViewModel
+import com.hanialjti.allchat.presentation.chat_entity_details.user_details.UserDetailsViewModel
+import com.hanialjti.allchat.presentation.chat_entity_details.user_details.UpdateMyProfileInfoViewModel
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -65,16 +69,13 @@ val preferencesModule = module {
         PreferencesLocalDataStore(androidContext())
     }
     single {
-        PreferencesRepository(
-            get()
-        )
+        PreferencesRepository(get())
     }
 }
 
 val authenticationModule = module {
-    single {
-        AuthenticationRepository(
-            get(),
+    single<AuthRepository> {
+        AuthenticationRepositoryImpl(
             get(),
             get(),
             get(named(DispatcherQualifiers.Io)),
@@ -87,20 +88,44 @@ val authenticationModule = module {
 }
 
 val filesModule = module {
-    single {
+    single<FileDownloader> {
         DefaultFileDownloader(externalScope = get(named(ScopeQualifiers.Application)))
     }
-    single {
-        FileRepository(androidContext(), get(named(DispatcherQualifiers.Io)), get(), get())
+    single<FileRepository> {
+        FileRepositoryImpl(androidContext(), get(named(DispatcherQualifiers.Io)), get(), get())
+    }
+}
+
+val infoModule = module {
+    single{
+        InfoRepository(
+            get(),
+            get(),
+            get(),
+            get(),
+            get(named(DispatcherQualifiers.Io)),
+            get(named(ScopeQualifiers.Application)),
+        )
+    }
+    factory { params ->
+        ChatDetailsViewModel(get(), params.get())
+    }
+    factory { params ->
+        UserDetailsViewModel(get(), params.get())
+    }
+    factory { params ->
+        UpdateChatDetailsViewModel(get(), params.get())
     }
 }
 
 val appModule = module {
     single {
-        InfoRepository(
+        AllChatSynchronizer(
             get(),
             get(),
-            get()
+            get(),
+            get(),
+            get(),
         )
     }
     single {
@@ -126,8 +151,8 @@ val appModule = module {
             get(qualifier = named(DispatcherQualifiers.Io))
         )
     }
-    single {
-        UserRepository(get(), get(), get(), get())
+    single<UserRepository> {
+        UserRepositoryImpl(get(), get(), get(), get(), get(), get())
     }
     single {
         AddContactViewModel(get(), get())
@@ -138,10 +163,6 @@ val appModule = module {
             get(),
             get(),
             get(),
-            get(),
-            get(),
-            get(),
-            params.get(),
             params.get()
         )
     }
@@ -152,7 +173,7 @@ val appModule = module {
         CreateChatRoomViewModel(get(), get())
     }
     single {
-        EditUserInfoViewModel(get())
+        UpdateMyProfileInfoViewModel(get())
     }
     factory {
         ConversationsViewModel(get(), get(), get(), get())
@@ -170,7 +191,7 @@ val appModule = module {
         ConversationTasksDataStore(get())
     }
     single {
-        ConnectionLifeCycleObserver(get(), get(), get(), get())
+        ConnectionLifeCycleObserver(get(), get(), get())
     }
     single<MessageTasksDataSource> {
         MessageTasksDataSourceImpl(get())
@@ -205,29 +226,8 @@ val roomModule = module {
     single {
         get<AllChatLocalRoomDatabase>().conversationDao()
     }
-}
-
-val useCaseModule = module {
     single {
-        ResetUnreadCounterUseCase(get())
-    }
-    single {
-        AddUserToContactsUseCase(get())
-    }
-    single {
-        SendReadMarkerForMessageUseCase(get())
-    }
-    single {
-        SyncMessagesUseCase(get(), get())
-    }
-    single {
-        GetUsersUseCase(get())
-    }
-    single {
-        InviteUsersToChatRoomUseCase(get(), get())
-    }
-    single {
-        GetConnectedUserUseCase(get())
+        get<AllChatLocalRoomDatabase>().participantDao()
     }
 }
 

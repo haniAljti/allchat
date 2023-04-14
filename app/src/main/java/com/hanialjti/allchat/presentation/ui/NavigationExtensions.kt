@@ -16,7 +16,10 @@ import com.hanialjti.allchat.presentation.chat.ChatScreen
 import com.hanialjti.allchat.presentation.component.CropImage
 import com.hanialjti.allchat.presentation.conversation.ConversationsScreen
 import com.hanialjti.allchat.presentation.create_chat_room.CreateChatRoomScreen
-import com.hanialjti.allchat.presentation.info.InfoScreen
+import com.hanialjti.allchat.presentation.chat_entity_details.chat_details.ChatDetailsScreen
+import com.hanialjti.allchat.presentation.chat_entity_details.user_details.UpdateMyProfileDetailsScreen
+import com.hanialjti.allchat.presentation.chat_entity_details.chat_details.UpdateChatInfoScreen
+import com.hanialjti.allchat.presentation.chat_entity_details.user_details.UserDetailsScreen
 import com.hanialjti.allchat.presentation.invite_users.InviteUsersScreen
 import com.hanialjti.allchat.presentation.preview_attachment.MediaPreview
 import com.hanialjti.allchat.presentation.ui.screens.*
@@ -62,7 +65,7 @@ fun NavigationLayout(
             }
 
             composable(Screen.EditUserInfo.route) {
-                EditUserInfoScreen(navController)
+                UpdateMyProfileDetailsScreen(navController)
             }
 
             bottomSheet(Screen.AddContact.route) {
@@ -87,14 +90,38 @@ fun NavigationLayout(
             }
 
             composable(
-                route = Screen.InfoScreen.route,
+                route = Screen.ChatDetailsScreen.route,
                 arguments = listOf(
                     navArgument("id") { type = NavType.StringType }
                 )
             ) {
                 val id = it.arguments?.getString("id")
                 id?.let {
-                    InfoScreen(id = id, navController = navController)
+                    ChatDetailsScreen(id = id, navController = navController)
+                } ?: throw IllegalArgumentException("id must not be null")
+            }
+
+            composable(
+                route = Screen.UpdateChatDetailsScreen.route,
+                arguments = listOf(
+                    navArgument("id") { type = NavType.StringType }
+                )
+            ) {
+                val id = it.arguments?.getString("id")
+                id?.let {
+                    UpdateChatInfoScreen(chatId = id, navController = navController)
+                } ?: throw IllegalArgumentException("id must not be null")
+            }
+
+            composable(
+                route = Screen.UserDetailsScreen.route,
+                arguments = listOf(
+                    navArgument("id") { type = NavType.StringType }
+                )
+            ) {
+                val id = it.arguments?.getString("id")
+                id?.let {
+                    UserDetailsScreen(id = id, navController = navController)
                 } ?: throw IllegalArgumentException("id must not be null")
             }
 
@@ -103,20 +130,18 @@ fun NavigationLayout(
             composable(
                 route = Screen.Chat.route,
                 arguments = listOf(
-                    navArgument("contactId") { type = NavType.StringType },
-                    navArgument("isGroupChat") { type = NavType.BoolType }
+                    navArgument("contactId") { type = NavType.StringType }
                 ),
                 deepLinks = listOf(
                     navDeepLink {
-                        uriPattern = uri.plus("/chat/{contactId}?isGroupChat={isGroupChat}")
+                        uriPattern = uri.plus("/chat/{contactId}")
                     }
                 )
             ) { backStackEntry ->
                 backStackEntry.arguments?.getString("contactId")?.let { contactId ->
                     ChatScreen(
-                        navController = navController,
                         contactId = contactId,
-                        isGroupChat = backStackEntry.arguments?.getBoolean("isGroupChat") ?: false
+                        navController = navController,
                     )
                 }
             }
@@ -154,7 +179,10 @@ fun NavController.toChatScreen(contactId: String, isGroupChat: Boolean) {
     navigate(
         Screen.Chat.route
             .replace("{contactId}", contactId)
-            .replace("{isGroupChat}", isGroupChat.toString())
+            .replace("{isGroupChat}", isGroupChat.toString()),
+        navOptions = navOptions {
+            popUpTo(Screen.Conversations.route)
+        }
     )
 }
 
@@ -189,8 +217,16 @@ fun NavController.toConversationsScreen() = navigate(
     }
 )
 
-fun NavController.toInfoScreen(id: String) = navigate(
-    Screen.InfoScreen.route.replace("{id}", id)
+fun NavController.toChatDetailsScreen(chatId: String) = navigate(
+    Screen.ChatDetailsScreen.route.replace("{id}", chatId)
+)
+
+fun NavController.toUpdateChatDetailsScreen(chatId: String) = navigate(
+    Screen.UpdateChatDetailsScreen.route.replace("{id}", chatId)
+)
+
+fun NavController.toUserDetailsScreen(userId: String) = navigate(
+    Screen.UserDetailsScreen.route.replace("{id}", userId)
 )
 
 fun NavController.toSignInScreen() = navigate(

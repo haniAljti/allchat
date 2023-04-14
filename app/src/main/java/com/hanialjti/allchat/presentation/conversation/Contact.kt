@@ -5,32 +5,36 @@ import androidx.annotation.DrawableRes
 import androidx.annotation.PluralsRes
 import androidx.annotation.StringRes
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.border
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.MaterialTheme
+import androidx.compose.material.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
 import androidx.core.net.toFile
 import coil.compose.rememberAsyncImagePainter
 import coil.request.ImageRequest
 import com.hanialjti.allchat.R
-import java.io.File
 
 sealed class ContactImage {
     class DynamicImage(val imageCacheUri: String) : ContactImage()
+    class DynamicRawImage(val bytes: ByteArray) : ContactImage()
     open class ImageRes(@DrawableRes val drawableRes: Int) : ContactImage()
 
-    class DefaultProfileImage(isGroupChat: Boolean) :
+    open class DefaultProfileImage(isGroupChat: Boolean) :
         ImageRes(if (isGroupChat) R.drawable.ic_group else R.drawable.ic_user)
+
+    object DefaultUserImage: DefaultProfileImage(false)
+    object DefaultGroupImage: DefaultProfileImage(true)
 
     @Composable
     fun AsImage(modifier: Modifier = Modifier) = when (this) {
@@ -48,14 +52,40 @@ sealed class ContactImage {
                 contentScale = ContentScale.Crop
             )
 
-        is ImageRes -> Image(
-            painter = painterResource(id = drawableRes),
-            contentDescription = null,
-            colorFilter = ColorFilter.tint(MaterialTheme.colors.primary),
+        is ImageRes -> Box(
             modifier = modifier
-                .border(width = 1.dp, color = MaterialTheme.colors.primary, shape = CircleShape)
                 .clip(CircleShape)
-        )
+                .background(MaterialTheme.colorScheme.secondaryContainer)
+        ) {
+            Icon(
+                painter = painterResource(id = drawableRes),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                modifier = Modifier.align(Alignment.Center)
+            )
+        }
+
+        is DynamicRawImage ->
+            Image(
+                painter = rememberAsyncImagePainter(
+                    ImageRequest
+                        .Builder(LocalContext.current)
+                        .size(50, 50)
+                        .data(bytes)
+                        .build()
+                ),
+                contentDescription = null,
+                modifier = modifier.clip(CircleShape),
+                contentScale = ContentScale.Crop
+            )
+//            Image(
+//            painter = painterResource(id = drawableRes),
+//            contentDescription = null,
+//            colorFilter = ColorFilter.tint(MaterialTheme.colors.primary),
+//            modifier = modifier
+//                .border(width = 1.dp, color = MaterialTheme.colors.primary, shape = CircleShape)
+//                .clip(CircleShape)
+//        )
     }
 }
 

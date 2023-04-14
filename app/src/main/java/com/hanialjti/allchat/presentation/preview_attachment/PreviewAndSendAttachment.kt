@@ -1,11 +1,11 @@
 package com.hanialjti.allchat.presentation.preview_attachment
 
-import android.os.Build
-import androidx.annotation.RequiresApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
-import androidx.compose.runtime.*
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -16,7 +16,6 @@ import com.hanialjti.allchat.data.model.MessageItem
 import com.hanialjti.allchat.presentation.component.TextInput
 import com.hanialjti.allchat.presentation.component.TopBar
 
-@RequiresApi(Build.VERSION_CODES.Q)
 @Composable
 fun PreviewAndSendAttachment(
     body: String,
@@ -32,6 +31,7 @@ fun PreviewAndSendAttachment(
 
 
         TopBar(
+            title = "",
             onBackClicked = onCloseClicked,
             modifier = Modifier.height(75.dp),
             moreOptions = {}

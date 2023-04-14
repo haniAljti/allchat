@@ -3,8 +3,8 @@ package com.hanialjti.allchat.data.local.room.entity
 import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
-import com.hanialjti.allchat.data.model.Participant
 import com.hanialjti.allchat.data.model.Role
+import java.time.OffsetDateTime
 
 @Entity(tableName = "chats")
 data class ChatEntity(
@@ -12,9 +12,11 @@ data class ChatEntity(
     val owner: String,
     @ColumnInfo(name = "is_group_chat")
     val isGroupChat: Boolean = false,
+    val description: String? = null,
     @ColumnInfo(name = "unread_messages_count")
     val unreadMessages: Int = 0,
-    val participants: Set<String> = setOf()
+    @ColumnInfo(name = "created_at")
+    val createdAt: OffsetDateTime? = null
 ) {
     data class Participant(
         val userId: String,

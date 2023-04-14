@@ -6,26 +6,21 @@ import android.content.Intent
 import android.os.Build
 import android.os.IBinder
 import androidx.annotation.RequiresApi
-import androidx.core.net.toUri
 import com.hanialjti.allchat.R
 import com.hanialjti.allchat.common.utils.ApplicationUtils
 import com.hanialjti.allchat.common.utils.Logger
-import com.hanialjti.allchat.common.utils.NotificationUtils
 import com.hanialjti.allchat.data.remote.xmpp.ServerPingWithAlarmManager
 import com.hanialjti.allchat.data.repository.IMessageRepository
-import com.hanialjti.allchat.data.repository.InfoRepository
 import com.hanialjti.allchat.di.AllChat
 import com.hanialjti.allchat.presentation.MainActivity
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.filter
 import org.jivesoftware.smack.tcp.XMPPTCPConnection
-import java.io.File
 
 class ChatForegroundService: Service() {
 
     private lateinit var serverPingWithAlarmManager: ServerPingWithAlarmManager
     private lateinit var connection: XMPPTCPConnection
-    private lateinit var userRepository: InfoRepository
     private lateinit var messageRepository: IMessageRepository
 
     private val job = SupervisorJob()
@@ -44,7 +39,6 @@ class ChatForegroundService: Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
 
         connection = AllChat.getKoinApplication().koin.get()
-        userRepository = AllChat.getKoinApplication().koin.get()
         messageRepository = AllChat.getKoinApplication().koin.get()
 
         ServerPingWithAlarmManager.onCreate(this)
@@ -59,18 +53,18 @@ class ChatForegroundService: Service() {
                 .collect {
                     if (ApplicationUtils.isInBackground) {
 
-                        val user = it.senderId?.let { it1 -> userRepository.getInfoFor(it1) }
-                        val image = user?.cachePath
-
-                        it.contactId?.let { it1 ->
-                            NotificationUtils.showNewMessageNotification(
-                                this@ChatForegroundService.applicationContext,
-                                it1,
-                                image?.let { File(it).toUri() },
-                                user?.nickname ?: "AllChat User",
-                                message = it
-                            )
-                        }
+//                        val user = it.senderId?.let { it1 -> userRepository.getInfoFor(it1) }
+//                        val image = user?.cachePath
+//
+//                        it.contactId?.let { it1 ->
+//                            NotificationUtils.showNewMessageNotification(
+//                                this@ChatForegroundService.applicationContext,
+//                                it1,
+//                                image?.let { File(it).toUri() },
+//                                user?.nickname ?: "AllChat User",
+//                                message = it
+//                            )
+//                        }
                     }
                 }
         }

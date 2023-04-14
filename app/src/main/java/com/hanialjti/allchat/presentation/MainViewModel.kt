@@ -4,7 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.hanialjti.allchat.data.local.datastore.PreferencesLocalDataStore
 import com.hanialjti.allchat.data.local.datastore.UserCredentials
-import com.hanialjti.allchat.data.repository.AuthenticationRepository
+import com.hanialjti.allchat.data.repository.AuthRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
@@ -14,7 +14,7 @@ import kotlinx.coroutines.launch
 class MainViewModel(
     private val preferencesLocalDataStore: PreferencesLocalDataStore,
 //    private val chatRepository: IMessageRepository,
-    private val authenticationRepository: AuthenticationRepository
+    private val authenticationRepository: AuthRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(MainUiState())

@@ -48,10 +48,10 @@ object AllChat {
                 preferencesModule,
                 authenticationModule,
                 filesModule,
+                infoModule,
                 appModule,
                 roomModule,
-                workerFactoryModule,
-                useCaseModule
+                workerFactoryModule
             )
             printLogger(Level.INFO)
         }

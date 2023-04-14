@@ -4,10 +4,7 @@ import androidx.room.ColumnInfo
 import androidx.room.Embedded
 import com.hanialjti.allchat.data.local.room.entity.ChatEntity
 import com.hanialjti.allchat.data.local.room.entity.UserEntity
-import com.hanialjti.allchat.data.model.Attachment
-import com.hanialjti.allchat.data.model.ContactWithLastMessage
-import com.hanialjti.allchat.data.model.MessageStatus
-import com.hanialjti.allchat.data.model.MessageSummary
+import com.hanialjti.allchat.data.model.*
 import com.hanialjti.allchat.presentation.conversation.ContactImage
 import kotlinx.datetime.*
 import java.time.OffsetDateTime
@@ -21,6 +18,15 @@ data class ChatWithLastMessage(
     @Embedded("message_")
     val lastMessage: MessageSummaryEntity?,
     val avatar: String?,
+    val nickname: String?
+)
+
+data class ParticipantInfo(
+    val chatId: String,
+    val userId: String,
+    val state: Participant.State = Participant.State.Inactive,
+    val role: Role = Role.Participant,
+    val cachePath: String?,
     val nickname: String?
 )
 

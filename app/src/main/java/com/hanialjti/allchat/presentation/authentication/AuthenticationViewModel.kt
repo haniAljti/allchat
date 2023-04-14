@@ -6,7 +6,7 @@ import com.hanialjti.allchat.R
 import com.hanialjti.allchat.data.local.datastore.UserCredentials
 import com.hanialjti.allchat.data.remote.InvalidUsernameOrPassword
 import com.hanialjti.allchat.data.remote.model.CallResult
-import com.hanialjti.allchat.data.repository.AuthenticationRepository
+import com.hanialjti.allchat.data.repository.AuthRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
@@ -14,7 +14,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 class AuthenticationViewModel(
-    private val authenticationRepository: AuthenticationRepository,
+    private val authenticationRepository: AuthRepository,
 //    private val userPreferencesManager: UserPreferencesManager,
 //    private val connectionManager: ConnectionManager
 ) : ViewModel() {

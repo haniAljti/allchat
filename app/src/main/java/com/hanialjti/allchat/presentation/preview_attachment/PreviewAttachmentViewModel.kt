@@ -1,7 +1,5 @@
 package com.hanialjti.allchat.presentation.preview_attachment
 
-import android.os.Build
-import androidx.annotation.RequiresApi
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.hanialjti.allchat.data.model.MessageItem
@@ -21,7 +19,6 @@ class PreviewAttachmentViewModel(
     private val _previewAttachmentUiState = MutableStateFlow(PreviewAttachmentUiState())
     val previewAttachmentUiState: StateFlow<PreviewAttachmentUiState> get() = _previewAttachmentUiState
 
-    @RequiresApi(Build.VERSION_CODES.Q)
     fun downloadAttachment(messageData: MessageItem.MessageData) {
         viewModelScope.launch {
             chatRepository.downloadAttachment(messageData)

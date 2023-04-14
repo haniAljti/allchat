@@ -11,7 +11,7 @@ import androidx.work.WorkerParameters
 import com.hanialjti.allchat.R
 import com.hanialjti.allchat.data.model.Media
 import com.hanialjti.allchat.data.remote.model.CallResult
-import com.hanialjti.allchat.data.repository.AuthenticationRepository
+import com.hanialjti.allchat.data.repository.AuthRepository
 import com.hanialjti.allchat.data.repository.FileRepository
 import com.hanialjti.allchat.data.repository.IMessageRepository
 import timber.log.Timber
@@ -22,7 +22,7 @@ class SendMessageWorker(
     parameters: WorkerParameters,
     private val chatRepository: IMessageRepository,
     private val fileRepository: FileRepository,
-    private val authenticationRepository: AuthenticationRepository
+    private val authenticationRepository: AuthRepository
 ) : CoroutineWorker(context, parameters) {
 
     override suspend fun doWork(): Result {
@@ -45,13 +45,11 @@ class SendMessageWorker(
                             val uploadResult = fileRepository.uploadFile(file)
 
                             if (uploadResult is CallResult.Success<String>) {
-                                chatRepository.updateMessage(
-                                    message.copy(
-                                        attachment = message.attachment.copy(
-                                            url = uploadResult.data
-                                        )
+                                chatRepository.updateAttachment(
+                                    message.id,
+                                    attachment = message.attachment.copy(
+                                        url = uploadResult.data
                                     )
-
                                 )
                             } else return Result.retry()
 

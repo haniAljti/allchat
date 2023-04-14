@@ -5,19 +5,12 @@ import androidx.paging.LoadType
 import androidx.paging.PagingState
 import androidx.paging.RemoteMediator
 import com.hanialjti.allchat.data.local.room.AllChatLocalRoomDatabase
-import com.hanialjti.allchat.data.local.room.LocalDataStore
-import com.hanialjti.allchat.data.local.room.dao.MessageDao
 import com.hanialjti.allchat.data.local.room.entity.MessageEntity
 import com.hanialjti.allchat.data.local.room.entity.asNetworkMessage
 import com.hanialjti.allchat.data.remote.MessageRemoteDataSource
-import com.hanialjti.allchat.data.remote.model.MessageQueryResult
 import com.hanialjti.allchat.data.remote.model.RemoteGroupInvitation
 import com.hanialjti.allchat.data.remote.model.RemoteMessage
 import com.hanialjti.allchat.data.remote.model.asMessageEntity
-import com.hanialjti.allchat.data.repository.IMessageRepository
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalPagingApi::class)
 class MessageRemoteMediator(

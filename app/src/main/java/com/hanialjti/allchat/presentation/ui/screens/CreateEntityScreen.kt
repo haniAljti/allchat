@@ -3,9 +3,12 @@ package com.hanialjti.allchat.presentation.ui.screens
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.Text
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import com.hanialjti.allchat.presentation.component.BottomSheetKnob
 import com.hanialjti.allchat.presentation.ui.toAddNewContactScreen
@@ -39,7 +42,7 @@ fun CreateEntityScreen(
 @Composable
 fun EntityObject(modifier: Modifier = Modifier, entity: Entity) {
     Box(modifier = modifier) {
-        Text(text = entity.content)
+        Text(text = entity.content, fontSize = 16.sp, color = MaterialTheme.colorScheme.onSecondaryContainer, fontWeight = FontWeight.Bold)
     }
 }
 

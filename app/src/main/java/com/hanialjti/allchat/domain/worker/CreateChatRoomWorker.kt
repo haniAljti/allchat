@@ -9,15 +9,14 @@ import androidx.work.CoroutineWorker
 import androidx.work.ForegroundInfo
 import androidx.work.WorkerParameters
 import com.hanialjti.allchat.R
-import com.hanialjti.allchat.data.remote.model.CallResult
-import com.hanialjti.allchat.data.repository.AuthenticationRepository
+import com.hanialjti.allchat.data.repository.AuthRepository
 import com.hanialjti.allchat.data.repository.ConversationRepository
 
 class CreateChatRoomWorker(
     context: Context,
     private val parameters: WorkerParameters,
     private val conversationRepository: ConversationRepository,
-    private val authenticationRepository: AuthenticationRepository
+    private val authenticationRepository: AuthRepository
 ) : CoroutineWorker(
     context,
     parameters

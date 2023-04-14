@@ -1,34 +1,33 @@
 package com.hanialjti.allchat.data.remote.xmpp
 
-import com.hanialjti.allchat.common.model.ListChange
 import com.hanialjti.allchat.common.utils.Logger
 import com.hanialjti.allchat.data.model.Avatar
 import com.hanialjti.allchat.data.remote.UserRemoteDataSource
 import com.hanialjti.allchat.data.remote.model.*
-import com.hanialjti.allchat.data.remote.xmpp.model.AvatarDataExtensionElement
-import com.hanialjti.allchat.data.remote.xmpp.model.AvatarMetaDataExtensionElement
+import com.hanialjti.allchat.data.remote.xmpp.model.*
+import com.hanialjti.allchat.presentation.conversation.ContactImage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.callbackFlow
-import kotlinx.coroutines.flow.merge
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.jivesoftware.smack.SmackException.NoResponseException
 import org.jivesoftware.smack.SmackException.NotConnectedException
 import org.jivesoftware.smack.XMPPException
 import org.jivesoftware.smack.packet.Presence
-import org.jivesoftware.smack.roster.Roster
-import org.jivesoftware.smack.roster.RosterListener
 import org.jivesoftware.smack.tcp.XMPPTCPConnection
 import org.jivesoftware.smackx.blocking.BlockingCommandManager
 import org.jivesoftware.smackx.iqlast.LastActivityManager
 import org.jivesoftware.smackx.nick.packet.Nick
+import org.jivesoftware.smackx.pep.PepEventListener
 import org.jivesoftware.smackx.pep.PepManager
+import org.jivesoftware.smackx.pubsub.AccessModel
 import org.jivesoftware.smackx.pubsub.PayloadItem
+import org.jivesoftware.smackx.pubsub.PubSubElementType
 import org.jivesoftware.smackx.pubsub.PubSubManager
+import org.jivesoftware.smackx.pubsub.packet.PubSub
+import org.jivesoftware.smackx.pubsub.provider.PubSubProvider
 import org.jivesoftware.smackx.vcardtemp.VCardManager
-import org.jxmpp.jid.Jid
 import org.jxmpp.jid.impl.JidCreate
 import timber.log.Timber
 import java.io.UnsupportedEncodingException
@@ -39,21 +38,24 @@ import java.time.ZoneOffset
 import java.util.*
 
 class XmppUserRemoteDataSource(
-    private val connection: XMPPTCPConnection
+    private val connection: XMPPTCPConnection,
+    private val rosterManager: RosterManager
 ) : UserRemoteDataSource {
 
     private val vCardManager = VCardManager.getInstanceFor(connection)
-    private val rosterManager = Roster.getInstanceFor(connection)
     private val lastActivityManager = LastActivityManager.getInstanceFor(connection)
     private val pepManager = PepManager.getInstanceFor(connection)
     private val blockingCommandManager = BlockingCommandManager.getInstanceFor(connection)
 
     override suspend fun getUpdatedUserInfo(userId: String) = withContext(Dispatchers.IO) {
         return@withContext try {
-            val vCard = getUserVCard(userId)
-                ?: return@withContext CallResult.Error("Failed to fetch user info")
+            val avatarResult = fetchAvatar(userId)
+            val nicknameResult = fetchNickname(userId)
 
-            val presence = getUserPresence(userId)
+            val avatar = if (avatarResult is CallResult.Success) avatarResult.data else null
+            val nickname = if (nicknameResult is CallResult.Success) nicknameResult.data else null
+
+            val presence = rosterManager.getUserPresence(userId)
                 ?: return@withContext CallResult.Error("Failed to fetch user info")
 
             val lastOnline = if (presence.isAvailable) null else lastActivity(userId)
@@ -65,19 +67,13 @@ class XmppUserRemoteDataSource(
             }
 
             CallResult.Success(
-                FullUserInfo(
-                    user = RemoteUser(
-                        id = userId,
-                        name = vCard.nickName,
-                        avatar = vCard.avatar?.let { data ->
-                            Avatar.Raw(data)
-                        }
-                    ),
-                    presence = RemotePresence(
-                        isOnline = presence.isAvailable,
-                        status = presence.status,
-                        lastOnline = lastOnlineDateTime
-                    )
+                FullRemoteUserInfo(
+                    id = userId,
+                    name = nickname,
+                    avatar = avatar,
+                    isOnline = presence.isAvailable,
+                    status = presence.status,
+                    lastOnline = lastOnlineDateTime
                 )
             )
         } catch (e: NoResponseException) {
@@ -97,13 +93,50 @@ class XmppUserRemoteDataSource(
 
     override suspend fun updateNickname(username: String): CallResult<Boolean> {
         return try {
-            pepManager.publish("http://jabber.org/protocol/nick", PayloadItem(Nick(username)))
+
+            val pubSub = pepManager.pepPubSubManager
+            val nicknameNode =
+                pubSub.getOrCreateLeafNode(Nick.NAMESPACE)
+
+            val nodeConfiguration = nicknameNode.nodeConfiguration
+            val fillableForm = nodeConfiguration.fillableForm
+
+            fillableForm.apply {
+                setPersistentItems(true)
+                accessModel = AccessModel.presence
+
+                if (nodeConfiguration.hasField("pubsub#send_last_published_item")) {
+                    setAnswer("pubsub#send_last_published_item", "never")
+                }
+            }
+
+            nicknameNode.sendConfigurationForm(fillableForm)
+            pepManager.publish(Nick.NAMESPACE, PayloadItem(Nick(username)))
             CallResult.Success(true)
         } catch (e: Exception) {
             Timber.e(e)
             CallResult.Error("Error")
         }
     }
+
+    private suspend fun fetchNickname(id: String): CallResult<String?> =
+        withContext(Dispatchers.IO) {
+            return@withContext try {
+                if (pepManager.isSupported) {
+                    val pubSubManager =
+                        PubSubManager.getInstanceFor(connection, JidCreate.bareFrom(id))
+                    val nicknameNode = pubSubManager.getLeafNode(Nick.NAMESPACE)
+                    val items = nicknameNode.getItems<PayloadItem<Nick>>()
+                    CallResult.Success(items.first().payload.name)
+                } else {
+                    val vCard = vCardManager.loadVCard()
+                    CallResult.Success(vCard.nickName)
+                }
+            } catch (e: Exception) {
+                CallResult.Error("Error while retrieving nickname")
+            }
+        }
+
 
     override suspend fun updateAvatar(data: ByteArray?): CallResult<Boolean> =
         withContext(Dispatchers.IO) {
@@ -131,6 +164,7 @@ class XmppUserRemoteDataSource(
                                 AvatarMetaDataExtensionElement(
                                     bytes = data.size,
                                     id = dataHash,
+                                    url = null,
                                     height = 96,
                                     width = 96,
                                     type = "image/png"
@@ -153,6 +187,42 @@ class XmppUserRemoteDataSource(
                 CallResult.Error("Error")
             }
         }
+
+    override suspend fun updateMyInfo(
+        name: String,
+        avatar: ContactImage?,
+        status: String?
+    ): CallResult<Boolean> {
+        return try {
+
+            if (!connection.isAuthenticated) return CallResult.Error("No user is logged in")
+
+            updateNickname(name)
+
+            when (avatar) {
+                is ContactImage.DynamicRawImage -> {
+                    updateAvatar(avatar.bytes)
+                }
+                is ContactImage.DefaultUserImage -> {
+                    updateAvatar(null) // remove image and stop sending updates
+                }
+                else -> {}
+            }
+
+            connection.sendStanza(
+                connection.stanzaFactory
+                    .buildPresenceStanza()
+                    .ofType(Presence.Type.available)
+                    .setStatus(status)
+                    .build()
+            )
+            CallResult.Success(true)
+        } catch (e: Exception) {
+            Logger.e(e)
+            CallResult.Error("", e)
+        }
+
+    }
 
     private fun sha1(bytes: ByteArray): String? {
         return try {
@@ -179,164 +249,146 @@ class XmppUserRemoteDataSource(
         return result
     }
 
-    override fun listenForUserUpdates(): Flow<UserUpdate> = merge(
-//        listenForNicknameUpdates(),
-//        listenForAvatarUpdates(),
-//        listenForPresenceUpdates()
-    )
+    override fun usersUpdateStream(): Flow<UserUpdate> = merge(
+        listenForNicknameUpdates(),
+        listenForAvatarUpdates(),
+        rosterManager.rosterUpdateStream
+            .filter { it is PresenceUpdated || it is PresenceSubscriptionArrived || it is PresenceSubscriptionApproved }
+            .onEach { Logger.d { "New Roster update" } }
+            .transform {
 
+                Logger.d { "New Presence from ${it.userId}" }
 
-//    private fun listenForNicknameUpdates() = callbackFlow<UserUpdate> {
-//        val listener = PepEventListener<Nick> { from, nickname, _, _ ->
-//            launch { send(NicknameUpdate(from.asBareJid().toString(), nickname.name)) }
-//        }
-//
-//        pepManager.addPepEventListener(Nick.NAMESPACE, Nick::class.java, listener)
-//
-//        awaitClose { pepManager.removePepEventListener(listener) }
-//    }
+                suspend fun fetchAndEmitUserInfo() {
 
-//    private fun listenForSubscriptionUpdates() = callbackFlow<UserUpdate> {
-//        val listener = PepEventListener<Nick> { from, nickname, _, _ ->
-//            launch { send(NicknameUpdate(from.asBareJid().toString(), nickname.name)) }
-//        }
-//
-//        pepManager.addPepEventListener(Nick.NAMESPACE, Nick::class.java, listener)
-//
-//        awaitClose { pepManager.removePepEventListener(listener) }
-//    }
+                    val avatarResult = fetchAvatar(it.userId)
 
-//    private fun listenForAvatarUpdates() = callbackFlow<UserUpdate> {
-//        val listener = PepEventListener<AvatarMetaDataExtensionElement> { from, metadata, _, _ ->
-//            launch { send(AvatarMetaDataUpdate(from.asBareJid().toString(), metadata.id)) }
-//        }
-//
-//        pepManager.addPepEventListener(
-//            AvatarMetaDataExtensionElement.NAMESPACE,
-//            AvatarMetaDataExtensionElement::class.java,
-//            listener
-//        )
-//
-//        awaitClose { pepManager.removePepEventListener(listener) }
-//    }
+                    if (avatarResult is CallResult.Success) {
+                        emit(AvatarUpdated(it.userId, avatarResult.data))
+                    }
 
-    private fun listenForPresenceUpdates() = callbackFlow<UserUpdate> {
+                    val nicknameResult = fetchNickname(it.userId)
 
-        val listener = object : RosterListener {
-            override fun entriesAdded(addresses: MutableCollection<Jid>?) {
-
-            }
-
-            override fun entriesUpdated(addresses: MutableCollection<Jid>?) {
-
-            }
-
-            override fun entriesDeleted(addresses: MutableCollection<Jid>?) {
-
-            }
-
-            override fun presenceChanged(presence: Presence?) {
-                val hightestPriorityPresence = rosterManager.getPresence(presence?.from?.asBareJid())
-                val userId = presence?.from?.asBareJid()?.toString()
-                val status = hightestPriorityPresence?.status
-                val isOnline = !hightestPriorityPresence.isAway
-
-                if (userId != null) {
-                    launch {
-                        send(
-                            PresenceUpdate(
-                                userId = userId,
-                                presence = RemotePresence(
-                                    isOnline = isOnline,
-                                    status = status
+                    if (nicknameResult is CallResult.Success) {
+                        nicknameResult.data?.let { nickname ->
+                            emit(
+                                NicknameUpdated(
+                                    it.userId,
+                                    nickname
                                 )
                             )
-                        )
-
+                        }
                     }
                 }
-            }
 
+                when (it) {
+                    is PresenceSubscriptionApproved -> {
+                        fetchAndEmitUserInfo()
+                    }
+                    is PresenceSubscriptionArrived -> {
+                        fetchAndEmitUserInfo()
+                    }
+                    is PresenceUpdated -> {
+                        emit(it.toUserUpdate())
+                    }
+                    else -> null // will not happen since the stream is filtered
+                }
+            }
+    )
+
+    private fun listenForNicknameUpdates() = callbackFlow<UserUpdate> {
+        val listener = PepEventListener<Nick> { from, nickname, _, _ ->
+            launch { send(NicknameUpdated(from.asBareJid().toString(), nickname.name)) }
         }
 
-        rosterManager.addRosterListener(listener)
+        pepManager.addPepEventListener(Nick.NAMESPACE, Nick::class.java, listener)
 
-        awaitClose { rosterManager.removeRosterListener(listener) }
+        awaitClose { pepManager.removePepEventListener(listener) }
     }
 
-//    private fun listenForPresenceUpdates() = callbackFlow<UserUpdate> {
-//
-//        val listener = object : PresenceEventListener {
-//            override fun presenceAvailable(address: FullJid?, availablePresence: Presence?) {
-//
-//                val hightestPriorityPresence = rosterManager.getPresence(address?.asBareJid())
-//                val userId = address?.asBareJid()?.toString()
-//                val status = hightestPriorityPresence?.status
-//                val isOnline = !hightestPriorityPresence.isAway
-//
-//                if (userId != null) {
-//                    launch {
-//                        send(
-//                            PresenceUpdate(
-//                                userId = userId,
-//                                presence = RemotePresence(
-//                                    isOnline = isOnline,
-//                                    status = status
-//                                )
-//                            )
-//                        )
-//
-//                    }
-//                }
-//            }
-//
-//            override fun presenceUnavailable(address: FullJid?, presence: Presence?) {
-//                val hightestPriorityPresence = rosterManager.getPresence(address?.asBareJid())
-//                val userId = address?.asBareJid()?.toString()
-//                val status = hightestPriorityPresence?.status
-//                val isOnline = !hightestPriorityPresence.isAway
-//
-//                if (userId != null) {
-//                    launch {
-//                        send(
-//                            PresenceUpdate(
-//                                userId = userId,
-//                                presence = RemotePresence(
-//                                    isOnline = isOnline,
-//                                    status = status,
-//                                    lastOnline = null
-//                                )
-//                            )
-//                        )
-//
-//                    }
-//                }
-//            }
-//
-//            override fun presenceError(address: Jid?, errorPresence: Presence?) {}
-//            override fun presenceSubscribed(address: BareJid?, subscribedPresence: Presence?) {}
-//            override fun presenceUnsubscribed(address: BareJid?, unsubscribedPresence: Presence?) {}
-//
-//        }
-//
-//        rosterManager.addPresenceEventListener(listener)
-//
-//        awaitClose { rosterManager.removePresenceEventListener(listener) }
-//    }
+    private fun listenForAvatarUpdates() = callbackFlow<UserUpdate> {
+        val listener = PepEventListener<AvatarMetaDataExtensionElement> { from, metadata, _, _ ->
+            metadata.url
+            launch {
+                send(
+                    AvatarMetadataUpdated(
+                        from.asBareJid().toString(),
+                        metadata.bytes,
+                        metadata.id,
+                        metadata.height,
+                        metadata.width,
+                        metadata.url,
+                        metadata.type
+                    )
+                )
+            }
+        }
 
-    override suspend fun fetchAvatarData(userId: String, hash: String): CallResult<String?> =
+        pepManager.addPepEventListener(
+            AvatarMetaDataExtensionElement.NAMESPACE,
+            AvatarMetaDataExtensionElement::class.java,
+            listener
+        )
+
+        awaitClose { pepManager.removePepEventListener(listener) }
+    }
+
+    override suspend fun fetchAvatar(userId: String, hash: String?): CallResult<Avatar?> =
         withContext(Dispatchers.IO) {
             return@withContext try {
-                val pubSubManager =
-                    PubSubManager.getInstanceFor(connection, JidCreate.bareFrom(userId))
-                val avatarNode = pubSubManager.getLeafNode(AvatarDataExtensionElement.NAMESPACE)
-                val items =
-                    avatarNode.getItems<PayloadItem<AvatarDataExtensionElement>>(listOf(hash))
-                CallResult.Success(items.first().payload.data)
+                if (!pepManager.isSupported) {
+                    val vCard = vCardManager.loadVCard()
+                    CallResult.Success(Avatar.Raw(vCard.avatar))
+                }
+
+                val pubSubManager = PubSubManager.getInstanceFor(connection, userId.asJid())
+
+
+                val metaDataNode =
+                    pubSubManager?.getLeafNode(AvatarMetaDataExtensionElement.NAMESPACE)
+
+                val metaData = metaDataNode
+                    ?.getItems<PayloadItem<AvatarMetaDataExtensionElement>>()
+                    ?.first()
+                    ?.payload
+
+                return@withContext if (metaData?.url != null) {
+                    CallResult.Success(Avatar.Url(metaData.url))
+                } else {
+
+                    val avatarDataNode =
+                        pubSubManager?.getLeafNode(AvatarDataExtensionElement.NAMESPACE)
+
+                    val avatarHash = hash ?: fetchAvatarHash(userId)
+                    val avatarData = avatarDataNode
+                        ?.getItems<PayloadItem<AvatarDataExtensionElement>>(listOf(avatarHash))
+                        ?.first()
+                        ?.payload
+
+                    CallResult.Success(avatarData?.data?.let { Avatar.Raw(decodeData(it)) })
+
+                }
             } catch (e: Exception) {
                 CallResult.Error("Error while retrieving avatar data")
             }
         }
+
+    private suspend fun fetchAvatarHash(id: String): String? = withContext(Dispatchers.IO) {
+        return@withContext try {
+            val pubSubManager =
+                PubSubManager.getInstanceFor(connection, JidCreate.bareFrom(id))
+            val avatarNode = pubSubManager.getLeafNode(AvatarMetaDataExtensionElement.NAMESPACE)
+            val items =
+                avatarNode.getItems<PayloadItem<AvatarMetaDataExtensionElement>>(1)
+            items.last().payload.id
+        } catch (e: Exception) {
+            Logger.e { "Error while retrieving avatar data" }
+            null
+        }
+    }
+
+    private fun decodeData(data: String): ByteArray =
+        Base64.getDecoder().decode(data)
 
     override suspend fun blockUser(userId: String): CallResult<Boolean> =
         withContext(Dispatchers.IO) {
@@ -360,146 +412,9 @@ class XmppUserRemoteDataSource(
             }
         }
 
-    private suspend fun getUserVCard(userId: String): org.jivesoftware.smackx.vcardtemp.packet.VCard? =
-        withContext(Dispatchers.IO) {
-            return@withContext try {
-                vCardManager.loadVCard(JidCreate.entityBareFrom(userId))
-            } catch (e: NoResponseException) {
-                Timber.e(e)
-                null
-            } catch (e: XMPPException) {
-                Timber.e(e)
-                null
-            } catch (e: NotConnectedException) {
-                Timber.e(e)
-                null
-            } catch (e: InterruptedException) {
-                Timber.e(e)
-                null
-            }
-        }
 
-    private suspend fun getUserPresence(userId: String): Presence? = withContext(Dispatchers.IO) {
-        return@withContext try {
-            rosterManager.getPresence(JidCreate.entityBareFrom(userId))
-        } catch (e: NoResponseException) {
-            Timber.e(e)
-            null
-        } catch (e: XMPPException) {
-            Timber.e(e)
-            null
-        } catch (e: NotConnectedException) {
-            Timber.e(e)
-            null
-        } catch (e: InterruptedException) {
-            Timber.e(e)
-            null
-        }
-    }
 
-    fun listenForUserChanges() = callbackFlow {
-
-        val rosterListener = object : RosterListener {
-
-            override fun entriesAdded(addresses: MutableCollection<Jid>?) {
-                Timber.d("Roster entries added")
-                addresses?.forEach { jid ->
-
-                    launch {
-                        val remoteUser = getUpdatedUserInfo(jid.asBareJid().toString())
-
-                        if (remoteUser is CallResult.Error) {
-                            Timber.e("Failed to fetch user info for ${jid.asBareJid()}")
-                        }
-                        val fetchedUser = (remoteUser as CallResult.Success<RemoteUser>).data
-
-                        send(
-                            ListChange.ItemAdded(
-                                RemoteUser(
-                                    id = jid.asBareJid().toString(),
-                                    name = fetchedUser?.name,
-                                    avatar = fetchedUser?.avatar
-                                )
-                            )
-                        )
-                    }
-                }
-            }
-
-            override fun entriesUpdated(addresses: MutableCollection<Jid>?) {
-                Timber.d("Roster entries updated")
-                addresses?.forEach { jid ->
-
-                    launch {
-                        val remoteUser = getUpdatedUserInfo(jid.asBareJid().toString())
-
-                        if (remoteUser is CallResult.Error) {
-                            Timber.e("Failed to fetch user info for ${jid.asBareJid()}")
-                        }
-                        val fetchedUser = (remoteUser as CallResult.Success<RemoteUser>).data
-
-                        send(
-                            ListChange.ItemUpdated(
-                                RemoteUser(
-                                    id = jid.asBareJid().toString(),
-                                    name = fetchedUser?.name,
-                                    avatar = fetchedUser?.avatar
-                                )
-                            )
-                        )
-                    }
-                }
-            }
-
-            override fun entriesDeleted(addresses: MutableCollection<Jid>?) {
-                TODO("Not yet implemented")
-            }
-
-            override fun presenceChanged(presence: Presence) {
-                val from = presence.from
-
-                from?.let { jid ->
-                    val bestPresence = rosterManager.getPresence(jid.asBareJid())
-                    val isOnline = bestPresence.isAvailable
-
-                    launch {
-                        try {
-                            if (connection.isAuthenticated) {
-                                val lastOnline =
-                                    if (isOnline) null else lastActivity(
-                                        from.asBareJid().toString()
-                                    )
-                                val lastOnlineDateTime = lastOnline?.let {
-                                    Instant.ofEpochMilli(it).atOffset(
-                                        ZoneOffset.UTC
-                                    )
-                                }
-                                send(
-                                    ListChange.ItemUpdated(
-                                        RemotePresence(
-                                            isOnline = isOnline,
-                                            lastOnline = lastOnlineDateTime,
-                                            status = bestPresence.status,
-                                        )
-                                    )
-                                )
-                            }
-                        } catch (e: Exception) {
-                            Timber.e(e)
-                        }
-                    }
-                }
-            }
-        }
-
-        rosterManager.addRosterListener(rosterListener)
-
-        awaitClose {
-            rosterManager.removeRosterListener(rosterListener)
-        }
-    }
-
-    suspend fun lastActivity(userId: String) = withContext(Dispatchers.IO) {
+    private suspend fun lastActivity(userId: String) = withContext(Dispatchers.IO) {
         return@withContext try {
             val lastActivity = lastActivityManager.getLastActivity(userId.asJid())
             lastActivity.lastActivity
@@ -518,14 +433,4 @@ class XmppUserRemoteDataSource(
         }
     }
 
-//    suspend fun getParticipantsInfo(conversation: String) = withContext(Dispatchers.IO) {
-//        return@withContext mucChatManager
-//            .getMultiUserChat(JidCreate.entityBareFrom(conversation))
-//            .participants
-//            .map {
-//                getUpdatedUserInfo(
-//                    it.jid.asBareJid().toString()
-//                )
-//            }
-//    }
 }

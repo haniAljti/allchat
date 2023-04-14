@@ -1,5 +1,6 @@
 package com.hanialjti.allchat.presentation.conversation
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalAnimationApi
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
@@ -10,22 +11,22 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.Icon
-import androidx.compose.material.MaterialTheme
-import androidx.compose.material.Text
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Alignment.Companion.BottomEnd
 import androidx.compose.ui.Alignment.Companion.Center
 import androidx.compose.ui.Alignment.Companion.CenterHorizontally
 import androidx.compose.ui.Alignment.Companion.CenterVertically
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -34,58 +35,133 @@ import androidx.navigation.NavHostController
 import androidx.paging.compose.LazyPagingItems
 import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.items
+import com.hanialjti.allchat.R
 import com.hanialjti.allchat.common.utils.TWO_DIGIT_FORMAT
 import com.hanialjti.allchat.common.utils.asString
 import com.hanialjti.allchat.data.model.ContactWithLastMessage
 import com.hanialjti.allchat.di.getViewModel
 import com.hanialjti.allchat.presentation.component.MessageStatusIcon
-import com.hanialjti.allchat.presentation.ui.theme.Green
-import com.hanialjti.allchat.presentation.ui.toChatScreen
-import com.hanialjti.allchat.presentation.ui.toCreateEntityScreen
+import com.hanialjti.allchat.presentation.ui.*
+import com.hanialjti.allchat.presentation.ui.screens.Entity
+import com.hanialjti.allchat.presentation.ui.screens.EntityObject
 import kotlinx.datetime.toJavaLocalDateTime
 import timber.log.Timber
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ConversationsScreen(
-    navController: NavHostController, viewModel: ConversationsViewModel = getViewModel()
+    navController: NavHostController,
+    viewModel: ConversationsViewModel = getViewModel()
 ) {
 
-    val contacts = remember(viewModel) {
-        viewModel.contacts
-    }.collectAsLazyPagingItems()
+    val contacts = viewModel.contacts.collectAsLazyPagingItems()
+    val uiState = viewModel.conversationsUiState.collectAsState()
+
+    LaunchedEffect(Unit) {
+        viewModel.synchronize()
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        Column(horizontalAlignment = CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
-            Text(text = "Chats",
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colors.primary,
-                fontSize = 20.sp,
-                modifier = Modifier
-                    .padding(top = 25.dp, bottom = 25.dp))
+        Column(
+            horizontalAlignment = CenterHorizontally,
+            modifier = Modifier.fillMaxWidth()
+        ) {
 
-            Spacer(
-                modifier = Modifier
-                    .height(2.dp)
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp)
-                    .alpha(0.2f)
-                    .background(MaterialTheme.colors.primary)
+            val topBarState = rememberTopAppBarState()
+            val scrollBehavior =
+                TopAppBarDefaults.exitUntilCollapsedScrollBehavior(state = topBarState)
+            Scaffold(
+                modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+                topBar = {
+                    LargeTopAppBar(
+                        title = {
+                            Text(
+                                text = "Chats",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 30.sp,
+                            )
+                        },
+                        actions = {
+                            Row {
+                                IconButton(
+                                    onClick = { navController.toEditUserInfoScreen() }
+                                ) {
+                                    Icon(
+                                        painter = painterResource(id = R.drawable.ic_user_edit),
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onBackground
+                                    )
+                                }
+                            }
+                        },
+                        colors = TopAppBarDefaults.largeTopAppBarColors(
+                            titleContentColor = MaterialTheme.colorScheme.onBackground,
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer
+                        ),
+                        scrollBehavior = scrollBehavior
+
+                    )
+                },
+                content = { innerPadding ->
+                    AnimatedVisibility(visible = uiState.value.isSynchronizing) {
+                        Row(verticalAlignment = CenterVertically) {
+                            Text(text = "Synchronizing...")
+                            CircularProgressIndicator(modifier = Modifier.size(16.dp))
+                        }
+                    }
+
+                    ConversationList(
+                        conversations = contacts,
+                        modifier = Modifier.padding(innerPadding)
+                    ) { conversation ->
+                        Timber.d(conversation.id)
+                        conversation.id?.let {
+                            navController.toChatScreen(conversation.id, conversation.isGroupChat)
+                        }
+                    }
+                }
             )
 
-            ConversationList(
-                conversations = contacts
-            ) { conversation ->
-                Timber.d(conversation.id)
-                conversation.id?.let {
-                    navController.toChatScreen(conversation.id, conversation.isGroupChat)
-                }
-            }
+//            Row(
+//                verticalAlignment = CenterVertically,
+//                modifier = Modifier.padding(horizontal = 25.dp, vertical = 15.dp)
+//            ) {
+//                Text(
+//                    text = "Chats",
+//                    fontWeight = FontWeight.Bold,
+//                    color = MaterialTheme.colorScheme.onBackground,
+//                    fontSize = 20.sp,
+//                    modifier = Modifier.weight(1f)
+//                )
+//
+//                IconButton(
+//                    onClick = { navController.toEditUserInfoScreen() }
+//                ) {
+//                    androidx.compose.material3.Icon(
+//                        painter = painterResource(id = R.drawable.ic_user_edit),
+//                        contentDescription = null,
+//                        tint = MaterialTheme.colorScheme.onBackground
+//                    )
+//                }
+//
+//            }
+
+
+//            Spacer(
+//                modifier = Modifier
+//                    .height(2.dp)
+//                    .fillMaxWidth()
+//                    .padding(horizontal = 20.dp)
+//                    .alpha(0.2f)
+//                    .background(MaterialTheme.colorScheme.onBackground)
+//            )
+
 
         }
 
-        androidx.compose.material3.FloatingActionButton(
-            onClick = { navController.toCreateEntityScreen() },
-            containerColor = MaterialTheme.colors.primary,
+        FloatingActionButton(
+            onClick = { viewModel.updateIsCreateChatMenuOpen(true) },
+            containerColor = MaterialTheme.colorScheme.primary,
             modifier = Modifier
                 .align(BottomEnd)
                 .padding(20.dp)
@@ -101,21 +177,49 @@ fun ConversationsScreen(
             Icon(
                 imageVector = Icons.Default.Add,
                 contentDescription = null,
-                tint = MaterialTheme.colors.background
+                tint = MaterialTheme.colorScheme.onPrimary
             )
         }
+
+        if (uiState.value.isCreateChatMenuOpen)
+            ModalBottomSheet(onDismissRequest = { viewModel.updateIsCreateChatMenuOpen(false) }) {
+                Column {
+                    EntityObject(
+                        modifier = Modifier
+                            .clickable {
+                                viewModel.updateIsCreateChatMenuOpen(false)
+                                navController.toAddNewContactScreen()
+                            }
+                            .padding(20.dp)
+                            .fillMaxWidth(),
+                        entity = Entity.Contact
+                    )
+                    EntityObject(
+                        modifier = Modifier
+                            .clickable {
+                                viewModel.updateIsCreateChatMenuOpen(false)
+                                navController.toCreateChatRoomScreens()
+                            }
+                            .padding(20.dp)
+                            .fillMaxWidth(),
+                        entity = Entity.ChatRoom
+                    )
+                }
+            }
     }
 }
 
 @Composable
 fun ConversationList(
     conversations: LazyPagingItems<ContactWithLastMessage>,
-    onConversationClicked: (ContactWithLastMessage) -> Unit
+    modifier: Modifier = Modifier,
+    onConversationClicked: (ContactWithLastMessage) -> Unit,
 ) {
 
     LazyColumn(
         horizontalAlignment = CenterHorizontally,
-        contentPadding = PaddingValues(bottom = 80.dp)
+        contentPadding = PaddingValues(bottom = 80.dp),
+        modifier = modifier
     ) {
         items(
             items = conversations,
@@ -131,6 +235,18 @@ fun ConversationList(
                 }
             } else PlaceholderConversation(modifier = Modifier.animateItemPlacement())
 
+        }
+
+        items(50) {
+            ConversationItem(
+                contactWithLastMessage = ContactWithLastMessage(
+                    id = it.toString(),
+                    isGroupChat = it % 3 == 0,
+                    name = it.toString()
+                ),
+                modifier = Modifier.animateItemPlacement(),
+            ) {
+            }
         }
 
     }
@@ -164,8 +280,8 @@ fun ConversationItem(
                         .size(16.dp)
                         .clip(CircleShape)
 //                        .shadow(elevation = 50.dp, shape = CircleShape)
-                        .border(3.dp, Color(0xFF111A14), CircleShape)
-                        .background(Green)
+                        .border(3.dp, MaterialTheme.colorScheme.background, CircleShape)
+                        .background(MaterialTheme.colorScheme.tertiary)
                 )
             }
         }
@@ -180,7 +296,7 @@ fun ConversationItem(
                 contactWithLastMessage.name?.let {
                     Text(
                         text = it,
-                        color = MaterialTheme.colors.primary,
+                        color = MaterialTheme.colorScheme.onBackground,
                         fontWeight = FontWeight.Bold
                     )
                 } ?: Spacer(modifier = Modifier.width(1.dp))
@@ -188,7 +304,7 @@ fun ConversationItem(
                 contactWithLastMessage.lastMessage?.timestamp?.let { lastUpdated ->
                     Text(
                         text = lastUpdated.toJavaLocalDateTime().asString(TWO_DIGIT_FORMAT),
-                        color = MaterialTheme.colors.primary,
+                        color = MaterialTheme.colorScheme.onBackground,
                         modifier = Modifier.align(Alignment.Bottom)
                     )
                 }
@@ -200,7 +316,7 @@ fun ConversationItem(
                     Row {
                         ConversationContentText(
                             text = it.text.asString(),
-                            color = MaterialTheme.colors.primary,
+                            color = MaterialTheme.colorScheme.onBackground,
                             fontWeight = if (it is ContactContent.LastMessage && !it.read) FontWeight.Bold else FontWeight.Normal,
                             modifier = Modifier.weight(1f)
                         )
@@ -221,7 +337,7 @@ fun ConversationItem(
                             .height(25.dp)
                             .defaultMinSize(minWidth = 25.dp)
                             .clip(CircleShape)
-                            .background(Green)
+                            .background(MaterialTheme.colorScheme.primary)
                             .padding(PaddingValues(horizontal = 7.dp))
                     ) {
                         Text(

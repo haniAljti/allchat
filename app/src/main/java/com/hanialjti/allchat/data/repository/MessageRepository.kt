@@ -26,7 +26,7 @@ class MessageRepository(
     private val messageLocalDataStore: AllChatLocalRoomDatabase,
     private val messageTasksDataSource: MessageTasksDataSource,
     private val messageRemoteDataSource: MessageRemoteDataSource,
-    private val authenticationRepository: AuthenticationRepository,
+    private val authenticationRepository: AuthRepository,
     private val preferencesRepository: PreferencesRepository,
     private val fileRepository: FileRepository,
     private val externalScope: CoroutineScope,
@@ -117,8 +117,9 @@ class MessageRepository(
             val message = messageDao.getMessageEntryByRemoteId(externalMessageId)
                 ?: return@async CallResult.Error("Message not found, can't send marker")
 
-            val sendResult = message.asNetworkMessage()
-                .let { messageRemoteDataSource.updateMarkerForMessage(it, Marker.Seen) }
+            val sendResult = message
+                .asNetworkMessage()
+                ?.let { messageRemoteDataSource.updateMarkerForMessage(it, Marker.Seen) }
 
             if (sendResult is CallResult.Success) {
                 updateMessage(message.copy(status = MessageStatus.Seen))
@@ -420,6 +421,10 @@ class MessageRepository(
 
     override suspend fun updateMessage(message: MessageEntity) {
         messageDao.upsertMessage(message)
+    }
+
+    override suspend fun updateAttachment(messageId: String, attachment: Attachment) {
+        messageDao.updateAttachment(messageId, attachment)
     }
 
     @RequiresApi(Build.VERSION_CODES.Q)

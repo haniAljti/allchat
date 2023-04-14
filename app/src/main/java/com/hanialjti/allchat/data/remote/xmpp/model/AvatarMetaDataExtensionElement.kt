@@ -9,10 +9,11 @@ data class AvatarMetaDataExtensionElement(
     val id: String?,
     val height: Int,
     val width: Int,
+    val url: String?,
     val type: String
 ) : ExtensionElement {
 
-    constructor(): this(0, null, 0, 0, "")
+    constructor(): this(0, null, 0, 0, null, "")
 
     companion object {
         const val NAMESPACE: String = "urn:xmpp:avatar:metadata"
@@ -24,6 +25,7 @@ data class AvatarMetaDataExtensionElement(
         const val ATTR_HEIGHT = "height"
         const val ATTR_WIDTH = "wight"
         const val ATTR_TYPE = "type"
+        const val ATTR_URL = "url"
     }
 
     override fun toXML(xmlEnvironment: XmlEnvironment): CharSequence {
@@ -38,11 +40,12 @@ data class AvatarMetaDataExtensionElement(
             attribute(ATTR_HEIGHT, height)
             attribute(ATTR_WIDTH, width)
             attribute(ATTR_TYPE, type)
+            optAttribute(ATTR_URL, url)
             closeEmptyElement()
             closeElement(elementName)
         }
     }
 
-    override fun getElementName() = Companion.ELEMENT_NAME
-    override fun getNamespace() = Companion.NAMESPACE
+    override fun getElementName() = ELEMENT_NAME
+    override fun getNamespace() = NAMESPACE
 }

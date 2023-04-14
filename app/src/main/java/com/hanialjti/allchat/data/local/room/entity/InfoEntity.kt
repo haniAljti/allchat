@@ -8,8 +8,10 @@ import androidx.room.PrimaryKey
 data class InfoEntity(
     @PrimaryKey val id: String,
     @ColumnInfo(name = "avatar_path")
-    val cachePath: String?,
+    val cachePath: String? = null,
     @ColumnInfo(name = "avatar_hash")
-    val avatarHash: String?,
-    val nickname: String
+    val avatarHash: String? = null,
+    @ColumnInfo(name = "avatar_url")
+    val avatarUrl: String? = null,
+    val nickname: String? = null
 )

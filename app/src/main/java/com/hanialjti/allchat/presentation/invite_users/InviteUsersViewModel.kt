@@ -3,8 +3,8 @@ package com.hanialjti.allchat.presentation.invite_users
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.hanialjti.allchat.data.model.User
-import com.hanialjti.allchat.domain.usecase.GetUsersUseCase
-import com.hanialjti.allchat.domain.usecase.InviteUsersToChatRoomUseCase
+import com.hanialjti.allchat.data.repository.ConversationRepository
+import com.hanialjti.allchat.data.repository.UserRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
@@ -13,8 +13,8 @@ import kotlinx.coroutines.launch
 
 class InviteUsersViewModel(
     private val chatRoomId: String,
-    private val getUsersUseCase: GetUsersUseCase,
-    private val inviteUsersUseCase: InviteUsersToChatRoomUseCase
+    private val userRepository: UserRepository,
+    private val conversationRepository: ConversationRepository
 ): ViewModel() {
 
     private val _uiState = MutableStateFlow(InviteUsersUiState())
@@ -22,7 +22,7 @@ class InviteUsersViewModel(
 
     init {
         viewModelScope.launch {
-            getUsersUseCase()
+            userRepository.getAllUsers()
                 .collectLatest { userList ->
                     _uiState.update {
                         it.copy(
@@ -35,8 +35,9 @@ class InviteUsersViewModel(
 
     fun inviteSelectedUsers() {
         viewModelScope.launch {
-            val invitedUsers = _uiState.value.selectedUsers.map { it.id }
-            inviteUsersUseCase(chatRoomId, *invitedUsers.toTypedArray())
+            _uiState.value.selectedUsers.forEach {
+                conversationRepository.inviteUserToChatRoom(it.id, chatRoomId)
+            }
         }
     }
 
