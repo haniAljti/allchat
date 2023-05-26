@@ -96,14 +96,6 @@ class MessageXmppDataSource(
                         )
                     }
                 }
-//                launch {
-//                    send(
-//                        RemoteMessage(
-//                            id = stanza.stanzaId,
-//                            messageStatus = MessageStatus.Sent,
-//                        )
-//                    )
-//                }
             }
         }
 
@@ -201,14 +193,6 @@ class MessageXmppDataSource(
                                     markers = if (chatMarker != null && sender != null) mapOf(sender to chatMarker.toMarker()) else mapOf()
                                 )
                             }
-//                            chatMarker?.let { markerWrapper ->
-//                                savableMessage.sender?.let {
-//                                    savableMessage.copy(
-//                                        id = markerWrapper.stanzaId,
-//                                        markers = mutableMapOf(savableMessage.sender to chatMarker.toMarker()),
-//                                    )
-//                                }
-//                            } ?: savableMessage
                         },
                     isComplete = query.isComplete,
                     error = null
@@ -360,58 +344,6 @@ class MessageXmppDataSource(
             .map { it.message },
         observeDeliveryReceipts()
     )
-
-//    private fun observeNewGroupMessages() = callbackFlow {
-//
-//        val listener = StanzaListener { stanza ->
-//            Timber.d("Received a group message $stanza")
-//
-//            if (stanza.stanzaId == null) {
-//                Timber.e("Received message has no stanzaId and therefore can not be saved to local storage")
-//                return@StanzaListener
-//            }
-//            if (stanza is Message) {
-//                val chatMarker = stanza.wrapMarker()
-//                launch {
-//                    send(
-//                        RemoteMessage(
-//                            id = chatMarker?.stanzaId ?: stanza.stanzaId,
-//                            body = if (stanza.isMessage()) stanza.body else null,
-//                            chatId = stanza.fromAsString(),
-//                            sender = stanza.from.resourceOrNull?.toString()?.asJid()?.asBareJid()
-//                                ?.toString(),
-//                            attachment = stanza.extractAttachment(),
-//                            type = MessageType.GroupChat,
-//                            thread = stanza.thread,
-//                            messageStatus = chatMarker?.toMessageStatus() ?: MessageStatus.Sent,
-//                            markers = chatMarker?.toMarker()?.let {
-//                                mutableMapOf(
-//                                    stanza.from.resourceOrNull.toString().asJid().asBareJid()
-//                                        .toString() to it
-//                                )
-//                            } ?: mutableMapOf()
-//                        )
-//                    )
-//                }
-//            } else {
-//                Timber.e("Received stanza is not a message: $stanza")
-//            }
-//
-//        }
-//
-//        connection.addStanzaListener(
-//            listener,
-//            AndFilter(
-//                StanzaTypeFilter.MESSAGE,
-//                MessageTypeFilter.GROUPCHAT,
-//                NotFilter(MessageTypeFilter.ERROR)
-//            )
-//        )
-//
-//        awaitClose {
-//            connection.removeStanzaListener(listener)
-//        }
-//    }
 
     override suspend fun updateMarkerForMessage(message: RemoteMessage, marker: Marker) =
         withContext(Dispatchers.IO) {

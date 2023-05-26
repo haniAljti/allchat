@@ -264,7 +264,7 @@ class UserRepositoryImpl(
                 userDao
                     .getAllByOwnerId(it)
                     .map { allUsers ->
-                        allUsers.map { userEntry -> userEntry.asUser() }
+                        allUsers.map { userEntry -> userEntry.asUserDetails() }
                     }
             } ?: emptyFlow()
         }

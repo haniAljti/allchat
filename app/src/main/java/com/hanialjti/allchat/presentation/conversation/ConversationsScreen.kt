@@ -237,22 +237,9 @@ fun ConversationList(
 
         }
 
-        items(50) {
-            ConversationItem(
-                contactWithLastMessage = ContactWithLastMessage(
-                    id = it.toString(),
-                    isGroupChat = it % 3 == 0,
-                    name = it.toString()
-                ),
-                modifier = Modifier.animateItemPlacement(),
-            ) {
-            }
-        }
-
     }
 }
 
-@OptIn(ExperimentalAnimationApi::class)
 @Composable
 fun ConversationItem(
     contactWithLastMessage: ContactWithLastMessage,

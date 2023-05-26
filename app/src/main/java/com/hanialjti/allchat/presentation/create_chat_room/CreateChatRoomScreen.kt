@@ -6,7 +6,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
 import com.hanialjti.allchat.di.getViewModel
-import com.hanialjti.allchat.presentation.invite_users.SelectableUsers
+import com.hanialjti.allchat.presentation.invite_users.SelectableUserList
 import com.hanialjti.allchat.presentation.ui.toChatScreen
 import kotlinx.coroutines.launch
 
@@ -33,7 +33,7 @@ fun CreateChatRoomScreen(
     ) { pageIndex ->
         when (pageIndex) {
             GroupChatCreationStep.SelectInitialParticipants.pageIndex -> {
-                SelectableUsers(
+                SelectableUserList(
                     title = "Select users to invite",
                     modifier = Modifier.fillMaxSize(),
                     onBackPressed = { navController.popBackStack() },

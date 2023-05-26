@@ -12,6 +12,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -31,9 +32,11 @@ fun SwipeableBox(
     onLeftSwipe: () -> Unit = {},
     onRightSwipe: () -> Unit = {},
     allowedSwipeDirection: SwipeDirection,
+    hiddenContentColor: Color,
+    swipableContentColor: Color,
     hiddenContent: @Composable () -> Unit,
     swipableContent: @Composable () -> Unit
-) {
+    ) {
 
     var size by remember { mutableStateOf(Size.Zero) }
     val sizePx = with(LocalDensity.current) { 60.dp.toPx() }
@@ -97,20 +100,20 @@ fun SwipeableBox(
             orientation = Orientation.Horizontal
         )
 
-    Box(modifier = boxModifier) {
+    Box(modifier = boxModifier.background(hiddenContentColor)) {
 
         Box(
             modifier = Modifier
                 .align(Alignment.CenterStart)
                 .padding(horizontal = 10.dp)
-                .background(MaterialTheme.colorScheme.surfaceVariant)
+
         ) {
             hiddenContent()
         }
 
         Box(modifier = Modifier
-            .background(MaterialTheme.colorScheme.background)
             .offset { IntOffset(swipeableState.offset.value.roundToInt(), 0) }
+            .background(swipableContentColor)
         ) {
             swipableContent()
         }

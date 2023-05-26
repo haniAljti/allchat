@@ -1,4 +1,4 @@
-package com.hanialjti.allchat.domain.worker
+package com.hanialjti.allchat.data.tasks
 
 import android.app.Notification
 import android.app.NotificationChannel

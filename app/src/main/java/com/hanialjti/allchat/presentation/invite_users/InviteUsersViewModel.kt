@@ -3,6 +3,7 @@ package com.hanialjti.allchat.presentation.invite_users
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.hanialjti.allchat.data.model.User
+import com.hanialjti.allchat.data.model.UserDetails
 import com.hanialjti.allchat.data.repository.ConversationRepository
 import com.hanialjti.allchat.data.repository.UserRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -10,12 +11,13 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonClassDiscriminator
 
 class InviteUsersViewModel(
     private val chatRoomId: String,
     private val userRepository: UserRepository,
     private val conversationRepository: ConversationRepository
-): ViewModel() {
+) : ViewModel() {
 
     private val _uiState = MutableStateFlow(InviteUsersUiState())
     val uiState: StateFlow<InviteUsersUiState> get() = _uiState
@@ -36,12 +38,14 @@ class InviteUsersViewModel(
     fun inviteSelectedUsers() {
         viewModelScope.launch {
             _uiState.value.selectedUsers.forEach {
-                conversationRepository.inviteUserToChatRoom(it.id, chatRoomId)
+                it.id?.let {
+                    conversationRepository.inviteUserToChatRoom(it, chatRoomId)
+                }
             }
         }
     }
 
-    fun addUserToInvitedList(user: User) {
+    fun addUserToInvitedList(user: UserDetails) {
         viewModelScope.launch {
             _uiState.update {
                 val updatedList = it.selectedUsers.toMutableSet().apply { add(user) }
@@ -52,7 +56,7 @@ class InviteUsersViewModel(
         }
     }
 
-    fun removeUserFromInvitedList(user: User) {
+    fun removeUserFromInvitedList(user: UserDetails) {
         viewModelScope.launch {
             _uiState.update {
                 val updatedList = it.selectedUsers.toMutableSet().apply { remove(user) }
@@ -65,8 +69,8 @@ class InviteUsersViewModel(
 }
 
 data class InviteUsersUiState(
-    val allUsers: Set<User> = setOf(),
-    val selectedUsers: Set<User> = setOf(),
+    val allUsers: Set<UserDetails> = setOf(),
+    val selectedUsers: Set<UserDetails> = setOf(),
     val isUsersInvited: Boolean = false,
     val message: String? = null,
     val isLoading: Boolean = false

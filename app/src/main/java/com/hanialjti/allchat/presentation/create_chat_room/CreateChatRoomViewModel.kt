@@ -3,7 +3,7 @@ package com.hanialjti.allchat.presentation.create_chat_room
 import androidx.compose.foundation.pager.PagerState
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.hanialjti.allchat.data.model.User
+import com.hanialjti.allchat.data.model.UserDetails
 import com.hanialjti.allchat.data.remote.model.CallResult
 import com.hanialjti.allchat.data.repository.ConversationRepository
 import com.hanialjti.allchat.data.repository.UserRepository
@@ -37,7 +37,7 @@ class CreateChatRoomViewModel(
     fun createChatRoom() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
-            val invitedUsers = _uiState.value.selectedUsers.map { it.id }.toSet()
+            val invitedUsers = _uiState.value.selectedUsers.mapNotNull { it.id }.toSet()
             val name = _uiState.value.roomName
             val creationResult = conversationRepository.createChatRoom(name, "", invitedUsers)
             if (creationResult is CallResult.Success) {
@@ -59,7 +59,7 @@ class CreateChatRoomViewModel(
         }
     }
 
-    fun addUserToInvitedList(user: User) {
+    fun addUserToInvitedList(user: UserDetails) {
         viewModelScope.launch {
             _uiState.update {
                 val updatedList = it.selectedUsers.toMutableSet().apply { add(user) }
@@ -70,7 +70,7 @@ class CreateChatRoomViewModel(
         }
     }
 
-    fun removeUserFromInvitedList(user: User) {
+    fun removeUserFromInvitedList(user: UserDetails) {
         viewModelScope.launch {
             _uiState.update {
                 val updatedList = it.selectedUsers.toMutableSet().apply { remove(user) }
@@ -83,8 +83,8 @@ class CreateChatRoomViewModel(
 }
 
 data class CreateChatRoomUiState(
-    val allUsers: Set<User> = setOf(),
-    val selectedUsers: Set<User> = setOf(),
+    val allUsers: Set<UserDetails> = setOf(),
+    val selectedUsers: Set<UserDetails> = setOf(),
     val currentStep: GroupChatCreationStep = GroupChatCreationStep.SelectInitialParticipants,
     val pagerState: PagerState = PagerState(),
     val message: String? = null,

@@ -133,12 +133,15 @@ class MucManager(
             MUCAffiliation.member -> {
                 RemoteParticipant(participant, Role.Participant)
             }
+
             MUCAffiliation.owner -> {
                 RemoteParticipant(participant, Role.Owner)
             }
+
             MUCAffiliation.admin -> {
                 RemoteParticipant(participant, Role.Admin)
             }
+
             else -> {
                 RemoteParticipant(participant, Role.None)
             }
@@ -682,15 +685,31 @@ class MucManager(
         invitees: Set<String>
     ): CallResult<String> = withContext(dispatcher) {
 
+        if (!connection.isAuthenticated) {
+            return@withContext CallResult.Error("User is not authenticated")
+        }
+
         val roomId = UUID.randomUUID().toString()
-        val roomJid = roomId.plus("@").plus(mucManager.mucServiceDomains.first())
-        val muc =
-            mucManager.getMultiUserChat(roomJid.asJid().asEntityBareJidIfPossible())
+
+        val roomJid = try {
+            roomId.plus("@").plus(mucManager.mucServiceDomains.first())
+        } catch (e: Exception) {
+            Logger.e(e)
+            null
+        }
+
+        val muc = try {
+            mucManager.getMultiUserChat(roomJid?.asJid()?.asEntityBareJidIfPossible())
+        } catch (e: Exception) {
+            Logger.e(e)
+            null
+        }
+
         val myId = connection.user.asBareJid().localpartOrNull?.toString()
 
         return@withContext try {
 
-            muc.apply {
+            muc?.apply {
                 create(Resourcepart.from(myId))
                     .configFormManager
                     .makeMembersOnly()
@@ -703,20 +722,25 @@ class MucManager(
                 changeSubject(roomName)
             }
 
-            bookmarkConference(roomJid, roomName)
-            clientDataStore.addChatRooms(
-                RoomState(
-                    id = roomJid,
-                    createdBy = myId,
-                    subject = roomName
+            if (roomJid != null) {
+                bookmarkConference(roomJid, roomName)
+
+                clientDataStore.addChatRooms(
+                    RoomState(
+                        id = roomJid,
+                        createdBy = myId,
+                        subject = roomName
+                    )
                 )
-            )
+            }
 
             CallResult.Success(roomJid)
         } catch (e: Exception) {
             Timber.e(e)
-            muc.destroy("Error while creating the room", null)
-            clientDataStore.removeChatRooms(roomJid)
+            muc?.destroy("Error while creating the room", null)
+            if (roomJid != null) {
+                clientDataStore.removeChatRooms(roomJid)
+            }
             CallResult.Error("An error occurred while creating chat room", e)
         }
     }

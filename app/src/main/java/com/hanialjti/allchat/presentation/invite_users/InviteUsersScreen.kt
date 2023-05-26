@@ -1,18 +1,23 @@
 package com.hanialjti.allchat.presentation.invite_users
 
-import androidx.compose.animation.*
-import androidx.compose.animation.core.*
-import androidx.compose.foundation.Image
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.Text
+import androidx.compose.material3.Button
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -20,18 +25,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
-import coil.compose.rememberAsyncImagePainter
-import coil.request.ImageRequest
-import com.hanialjti.allchat.R
-import com.hanialjti.allchat.data.model.User
+import com.hanialjti.allchat.data.model.UserDetails
 import com.hanialjti.allchat.di.getViewModel
+import com.hanialjti.allchat.presentation.component.AnimatedCheckBox
 import com.hanialjti.allchat.presentation.component.TopBar
 import org.koin.core.parameter.parametersOf
 
@@ -44,7 +43,7 @@ fun InviteUsersScreen(
 
     val uiState by remember(viewModel) { viewModel.uiState }.collectAsState()
 
-    SelectableUsers(
+    SelectableUserList(
         title = "Select users to invite",
         modifier = Modifier.fillMaxSize(),
         onBackPressed = { navController.popBackStack() },
@@ -64,13 +63,13 @@ fun InviteUsersScreen(
 }
 
 @Composable
-fun SelectableUsers(
+fun SelectableUserList(
     title: String,
     modifier: Modifier = Modifier,
     onBackPressed: () -> Unit,
-    allUsers: Set<User>,
-    selectedUsers: Set<User>,
-    onSelectedValueChanged: (User, Boolean) -> Unit,
+    allUsers: Set<UserDetails>,
+    selectedUsers: Set<UserDetails>,
+    onSelectedValueChanged: (UserDetails, Boolean) -> Unit,
     onDoneClicked: () -> Unit,
     doneButtonText: String,
 ) {
@@ -84,18 +83,28 @@ fun SelectableUsers(
             ) {
             }
 
-            SelectableUsersList(
-                allUsers = allUsers,
-                selectedUsers = selectedUsers,
-                onSelectedValueChanged = onSelectedValueChanged
-            )
+            LazyColumn {
+                items(
+                    count = allUsers.size,
+                    key = { index -> allUsers.elementAt(index).id ?: index }
+                ) { index ->
+                    val user = allUsers.elementAt(index)
+
+                    SelectableUser(
+                        user = user,
+                        selected = selectedUsers.contains(user),
+                        onSelectedChanged = { onSelectedValueChanged(user, it) },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
 
         }
 
         Button(
             modifier = Modifier
-                .padding(20.dp)
                 .fillMaxWidth()
+                .padding(20.dp)
                 .align(Alignment.BottomCenter),
             onClick = onDoneClicked,
             shape = MaterialTheme.shapes.medium
@@ -107,32 +116,8 @@ fun SelectableUsers(
 }
 
 @Composable
-fun SelectableUsersList(
-    allUsers: Set<User>,
-    selectedUsers: Set<User>,
-    onSelectedValueChanged: (User, Boolean) -> Unit
-) {
-
-    LazyColumn {
-        items(
-            count = allUsers.size,
-            key = { index -> allUsers.elementAt(index).id }
-        ) { index ->
-            val user = allUsers.elementAt(index)
-
-            SelectableUser(
-                user = user,
-                selected = selectedUsers.contains(user),
-                onSelectedChanged = { onSelectedValueChanged(user, it) }
-            )
-        }
-    }
-}
-
-@OptIn(ExperimentalAnimationApi::class)
-@Composable
 fun SelectableUser(
-    user: User,
+    user: UserDetails,
     selected: Boolean,
     modifier: Modifier = Modifier,
     onSelectedChanged: (Boolean) -> Unit
@@ -140,8 +125,7 @@ fun SelectableUser(
     Row(
         modifier = modifier
             .clickable { onSelectedChanged(!selected) }
-            .padding(horizontal = 36.dp, vertical = 12.dp)
-            .fillMaxWidth(),
+            .padding(horizontal = 36.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
 
@@ -159,8 +143,8 @@ fun SelectableUser(
                     modifier = Modifier
                         .size(24.dp)
                         .clip(CircleShape)
-                        .border(3.dp, MaterialTheme.colors.primary, CircleShape)
-                        .background(androidx.compose.material3.MaterialTheme.colorScheme.primary)
+                        .border(3.dp, MaterialTheme.colorScheme.background, CircleShape)
+                        .background(MaterialTheme.colorScheme.primary)
                 )
             }
         }
@@ -175,121 +159,19 @@ fun SelectableUser(
             user.name?.let {
                 Text(
                     text = it,
-                    color = MaterialTheme.colors.primary,
+                    color = MaterialTheme.colorScheme.onBackground,
                     fontWeight = FontWeight.Bold
                 )
             }
         }
 
-        Box {
-            AnimatedCheckBox(
-                isChecked = selected,
-                onClicked = onSelectedChanged,
-                modifier = modifier.size(25.dp)
-            )
-        }
 
-//        Column(
-//            horizontalAlignment = Alignment.CenterHorizontally,
-//            modifier = Modifier.padding(end = 10.dp)
-//        ) {
-//
-//            contact.lastUpdated?.let { lastUpdated ->
-//                Text(
-//                    text = lastUpdated.formatTimestamp(TWO_DIGIT_FORMAT),
-//                    color = MaterialTheme.colors.primary,
-//                    modifier = Modifier
-//                )
-//            }
-//
-//            if (contact.unreadMessages > 0) {
-//                Box(
-//                    modifier = Modifier
-//                        .padding(top = 5.dp)
-//                        .height(25.dp)
-//                        .defaultMinSize(minWidth = 25.dp)
-//                        .clip(CircleShape)
-//                        .background(Green)
-//                        .align(Alignment.CenterHorizontally)
-//                        .padding(PaddingValues(horizontal = 7.dp))
-//                ) {
-//                    Text(
-//                        text = contact.unreadMessages.toString(),
-//                        color = Color.White,
-//                        fontWeight = FontWeight.Bold,
-//                        modifier = Modifier.align(Alignment.Center)
-//                    )
-//                }
-//            }
-//        }
+        AnimatedCheckBox(
+            isChecked = selected,
+            onClicked = onSelectedChanged,
+            modifier = Modifier.size(25.dp)
+        )
+
     }
 }
 
-@OptIn(ExperimentalAnimationApi::class)
-@Composable
-fun AnimatedCheckBox(
-    isChecked: Boolean,
-    onClicked: (Boolean) -> Unit,
-    modifier: Modifier = Modifier
-) {
-
-    val transition =
-        updateTransition(targetState = isChecked, label = "")
-
-    val recordButtonColor by transition.animateColor(label = "") { recording ->
-        if (recording) androidx.compose.material3.MaterialTheme.colorScheme.primary else Color.Transparent
-    }
-
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(35))
-            .border(1.dp, Color.White, RoundedCornerShape(35))
-            .background(color = recordButtonColor)
-            .clickable {
-                onClicked(!isChecked)
-            }
-    ) {
-        AnimatedVisibility(
-            visible = isChecked,
-            enter = scaleIn(
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                    stiffness = Spring.StiffnessMedium
-                )
-            ),
-            exit = scaleOut()
-        ) {
-            Icon(imageVector = Icons.Default.Check, contentDescription = null)
-        }
-    }
-}
-
-@Composable
-fun UserImage(
-    image: String?,
-    modifier: Modifier = Modifier,
-    isGroupChat: Boolean = false
-) {
-    Image(
-        painter = rememberAsyncImagePainter(
-            ImageRequest
-                .Builder(LocalContext.current)
-                .size(50, 50)
-                .data(image ?: if (isGroupChat) R.drawable.ic_group else R.drawable.ic_user)
-                .build()
-        ),
-        contentDescription = null,
-        colorFilter = if (image == null) ColorFilter.tint(MaterialTheme.colors.primary) else null,
-        modifier = modifier
-            .clip(CircleShape)
-            .apply {
-                if (image == null)
-                    border(
-                        width = 3.dp,
-                        color = MaterialTheme.colors.primary,
-                        shape = CircleShape
-                    )
-            },
-        contentScale = ContentScale.Crop
-    )
-}

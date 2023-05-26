@@ -20,16 +20,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
@@ -60,7 +58,6 @@ import kotlin.time.toKotlinDuration
 //    ) { }
 //}
 
-@OptIn(ExperimentalMaterialApi::class)
 @Composable
 fun TextInput(
     modifier: Modifier = Modifier,
@@ -120,26 +117,8 @@ fun TextInput(
             rememberUserInputState(recordInitialValue = RecordingButtonState.Initial)
         val attachmentDeleteRecordingButton by remember { derivedStateOf { attachmentButtonVisible || userInputState.isRecording } }
         var showSelectAttachmentMenu by remember { mutableStateOf(false) }
-        val scope = rememberCoroutineScope()
-        val haptic = LocalHapticFeedback.current
-        val layoutDirection = LocalLayoutDirection.current
 
         Box {
-
-            var size by remember { mutableStateOf(Size.Zero) }
-            val sizePx = with(LocalDensity.current) { 55.dp.toPx() }
-            val width = remember(size) {
-                if (size.width == 0f) {
-                    1f
-                } else {
-                    size.width - (sizePx)
-                }
-            }
-
-            val anchors = mapOf(
-                -width + (sizePx / 2) to RecordingButtonState.Cancel,
-                0f to RecordingButtonState.Initial
-            )
 
             val buttonMode by remember(message, attachment, recordButtonVisible) {
                 derivedStateOf {
@@ -151,61 +130,14 @@ fun TextInput(
                 }
             }
 
-            var textInputModifier = Modifier
-                .onSizeChanged { size = Size(it.width.toFloat(), it.height.toFloat()) }
-                .fillMaxWidth()
-
-            if (buttonMode == SendButtonMode.Record) {
-                textInputModifier = textInputModifier
-                    .swipeable(
-                        interactionSource = userInputState.interactionSource,
-                        state = userInputState.swipeableState,
-                        anchors = anchors,
-                        reverseDirection = layoutDirection == LayoutDirection.Rtl,
-                        thresholds = { _, _ -> FractionalThreshold(0.5f) },
-                        orientation = Orientation.Horizontal,
-                        enabled = !userInputState.thresholdReached
-                    )
-
-            }
-
-            if (userInputState.isRecording) {
-                textInputModifier = textInputModifier
-                    .background(
-                        MaterialTheme.colorScheme.secondaryContainer
-                    )
-            }
-
-            if (userInputState.isRecording) {
-                DisposableEffect(Unit) {
-                    onRecordingStarted()
-
-                    onDispose {
-                        onRecordingEnded()
-                        scope.launch {
-                            userInputState.animateRecordingStateTo(RecordingButtonState.Initial)
-                        }
-                    }
-                }
-            }
-
-            if (userInputState.thresholdReached) {
-                LaunchedEffect(Unit) {
-                    scope.launch {
-                        println("Threshold reached")
-                        onRecordingCancelled()
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    }
-                }
-            }
-
             if (!showSelectAttachmentMenu) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween,
-                    modifier = textInputModifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 10.dp, vertical = 5.dp)
                 ) {
-
 
                     AnimatedContent(
                         targetState = userInputState.isRecording,
@@ -213,12 +145,10 @@ fun TextInput(
                     ) {
                         if (it) {
 
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween,
+                            Box(
                                 modifier = Modifier
-                                    .width(100.dp)
-                                    .background(Color.Transparent)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(MaterialTheme.colorScheme.errorContainer)
                             ) {
                                 var ticks by remember { mutableStateOf(0) }
                                 LaunchedEffect(Unit) {
@@ -231,21 +161,14 @@ fun TextInput(
                                 val duration =
                                     Duration.ofSeconds(ticks.toLong()).toKotlinDuration()
 
-                                Icon(
-                                    painter = painterResource(id = R.drawable.ic_remove),
-                                    modifier = Modifier
-                                        .padding(horizontal = 25.dp)
-                                        .size(24.dp),
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSecondaryContainer
-                                )
-
                                 Text(
                                     text = "Recording $duration",
                                     fontSize = 14.sp,
                                     maxLines = 1,
-                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                    modifier = modifier.weight(1f)
+                                    color = MaterialTheme.colorScheme.onErrorContainer,
+                                    modifier = Modifier
+                                        .padding(5.dp)
+                                        .align(Alignment.Center)
                                 )
 
                             }
@@ -263,7 +186,7 @@ fun TextInput(
                                 cursorBrush = SolidColor(Color.White),
                                 decorationBox = { innerTextField ->
                                     Row(
-                                        modifier
+                                        Modifier
                                             .clip(RoundedCornerShape(30))
                                             .background(MaterialTheme.colorScheme.secondaryContainer)
                                             .height(45.dp)
@@ -308,14 +231,6 @@ fun TextInput(
                         targetState = buttonMode,
                         transitionSpec = { scaleIn() with scaleOut() },
                         modifier = Modifier
-                            .shadow(elevation = 1.dp, shape = CircleShape)
-                            .offset {
-                                IntOffset(
-                                    userInputState.swipeOffset.roundToInt(),
-//                                swipeableState.offset.value.roundToInt(),
-                                    0
-                                )
-                            }
                     ) {
 
                         val buttonModifier = Modifier
@@ -343,52 +258,24 @@ fun TextInput(
                                     )
                                 }
                             }
+
                             SendButtonMode.Record -> {
-
-                                val transition =
-                                    updateTransition(
-                                        targetState = userInputState.isRecording,
-                                        label = ""
-                                    )
-
-                                val recordButtonSize by transition.animateDp(label = "") { recording ->
-                                    if (recording) 60.dp else initialButtonSize
-                                }
-
-                                val recordButtonColor by transition.animateColor(label = "") { recording ->
-                                    if (recording) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.secondary
-                                }
-
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    if (userInputState.isRecording)
-                                        Text(
-                                            text = "< Swipe to delete",
-                                            fontSize = 12.sp,
-                                            maxLines = 1,
-                                            color = MaterialTheme.colorScheme.onSecondaryContainer
-                                        )
-                                    IconButton(
-                                        onClick = onRecordClicked,
-                                        interactionSource = userInputState.interactionSource,
-                                        modifier = buttonModifier
-                                            .background(recordButtonColor)
-                                            .size(recordButtonSize)
-
-                                    ) {
-                                        Icon(
-                                            painter = painterResource(
-                                                id = R.drawable.ic_record
-                                            ),
-                                            contentDescription = null,
-                                            modifier = Modifier.size(24.dp),
-                                            tint = MaterialTheme.colorScheme.onSecondary
-                                        )
-                                    }
-                                }
-
+                                SwipeToDeleteRecording(
+                                    onRecordingCancel = onRecordingCancelled,
+                                    onRecordingStart = onRecordingStarted,
+                                    onRecordingEnd = onRecordingEnded,
+                                    initialButtonSize = initialButtonSize,
+                                    recordingButtonSize = 60.dp,
+                                    onRecord = onRecordClicked,
+                                    userInputState = userInputState,
+                                    modifier = Modifier
+                                        .animateContentSize()
+                                        .width(if (userInputState.isRecording) 250.dp else 45.dp)
+                                )
                             }
                         }
                     }
+
                 }
             }
             androidx.compose.animation.AnimatedVisibility(
@@ -473,3 +360,127 @@ private sealed class SelectAttachmentOption(
 }
 
 private enum class SendButtonMode { Send, Record, None }
+
+@OptIn(ExperimentalMaterialApi::class)
+@Composable
+fun SwipeToDeleteRecording(
+    onRecordingCancel: () -> Unit,
+    onRecordingStart: () -> Unit,
+    onRecordingEnd: () -> Unit,
+    initialButtonSize: Dp,
+    recordingButtonSize: Dp,
+    onRecord: () -> Unit,
+    userInputState: UserInputState,
+    modifier: Modifier = Modifier
+) {
+
+    var width by remember { mutableStateOf(50f) }
+    val scope = rememberCoroutineScope()
+
+    val haptic = LocalHapticFeedback.current
+    val layoutDirection = LocalLayoutDirection.current
+
+    if (userInputState.thresholdReached) {
+        LaunchedEffect(Unit) {
+            scope.launch {
+                println("Threshold reached")
+                onRecordingCancel()
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            }
+        }
+    }
+
+    if (userInputState.isRecording) {
+        DisposableEffect(Unit) {
+            onRecordingStart()
+
+            onDispose {
+                onRecordingEnd()
+                scope.launch {
+                    userInputState.animateRecordingStateTo(RecordingButtonState.Initial)
+                }
+            }
+        }
+    }
+
+    val anchors = mapOf(
+        -(width) to RecordingButtonState.Cancel,
+        0f to RecordingButtonState.Initial
+    )
+
+    val transition = updateTransition(
+        targetState = userInputState.isRecording,
+        label = ""
+    )
+
+    val recordButtonSize by transition.animateDp(label = "") { recording ->
+        if (recording) recordingButtonSize else initialButtonSize
+    }
+
+    val recordButtonColor by animateColorAsState(targetValue = )
+
+    BoxWithConstraints(
+        modifier = modifier
+            .background(
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                shape = RoundedCornerShape(50)
+            )
+            .swipeable(
+                interactionSource = userInputState.interactionSource,
+                state = userInputState.swipeableState,
+                anchors = anchors,
+                reverseDirection = layoutDirection == LayoutDirection.Rtl,
+                thresholds = { _, _ -> FractionalThreshold(1f) },
+                orientation = Orientation.Horizontal,
+                enabled = true
+            )
+    ) {
+        width = maxWidth.value
+
+        if (userInputState.isRecording) {
+            Icon(
+                painter = painterResource(id = R.drawable.ic_remove),
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .padding(horizontal = 25.dp)
+                    .size(24.dp),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSecondaryContainer
+            )
+        }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .offset {
+                    IntOffset(userInputState.swipeOffset.roundToInt(), 0)
+                }
+        ) {
+            if (userInputState.isRecording) {
+                Text(
+                    text = " < ",
+                    fontSize = 12.sp,
+                    maxLines = 1,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                )
+            }
+            IconButton(
+                onClick = onRecord,
+                interactionSource = userInputState.interactionSource,
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.secondaryContainer)
+                    .size(recordButtonSize)
+            ) {
+                Icon(
+                    painter = painterResource(
+                        id = R.drawable.ic_record
+                    ),
+                    contentDescription = null,
+                    modifier = Modifier.size(24.dp),
+                    tint = MaterialTheme.colorScheme.onSecondary
+                )
+            }
+        }
+    }
+}

@@ -26,6 +26,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -33,6 +34,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import androidx.paging.LoadState
 import androidx.paging.compose.LazyPagingItems
@@ -62,9 +64,7 @@ import org.koin.core.parameter.parametersOf
 import java.io.File
 
 
-@OptIn(
-    ExperimentalPermissionsApi::class
-)
+@OptIn(ExperimentalPermissionsApi::class)
 @Composable
 fun ChatScreen(
     contactId: String,
@@ -72,7 +72,7 @@ fun ChatScreen(
     viewModel: ChatViewModel = getViewModel(parameters = { parametersOf(contactId) })
 ) {
 
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val messages = viewModel.messages.collectAsLazyPagingItems()
 
     val coroutine = rememberCoroutineScope()
@@ -244,6 +244,7 @@ fun ChatScreen(
                         is PermissionStatus.Denied -> {
                             recordAudioPermissionState.launchPermissionRequest()
                         }
+
                         else -> {}
                     }
                 },
@@ -253,6 +254,7 @@ fun ChatScreen(
                         is PermissionStatus.Denied -> {
                             recordAudioPermissionState.launchPermissionRequest()
                         }
+
                         PermissionStatus.Granted -> {
                             //TODO handle null file
                             val tempFile = viewModel.createNewTempFile(".m4a")
@@ -315,10 +317,12 @@ fun ChatScreen(
                     mediaRecorderState.stopMediaRecorder()
                     viewModel.setAllMessagesAsRead()
                 }
+
                 Lifecycle.Event.ON_DESTROY -> {
                     mediaPlayerState.releasePlayer()
                     mediaRecorderState.releaseRecorder()
                 }
+
                 else -> {}
             }
         }
@@ -418,7 +422,7 @@ fun MessagesList(
         )
     )
 
-    var flashMessage by remember { mutableStateOf(-1) }
+    var flashMessage: Int? by remember { mutableStateOf(null) }
 
     if (flashColor) {
         LaunchedEffect(Unit) {
@@ -479,13 +483,14 @@ fun MessagesList(
                                 )
                             },
                             onLeftSwipe = { replyTo(message) },
-                            allowedSwipeDirection = SwipeDirection.LEFT
+                            allowedSwipeDirection = SwipeDirection.LEFT,
+                            hiddenContentColor = MaterialTheme.colorScheme.surfaceVariant,
+                            swipableContentColor = if (flashMessage == index) color else MaterialTheme.colorScheme.background
                         ) {
 
                             val messageModifier = Modifier
                                 .fillMaxWidth()
                                 .heightIn(min = 50.dp)
-                                .background(MaterialTheme.colorScheme.background)
 
                             val downloadProgress by remember(downloadProgressMap) {
                                 derivedStateOf {
@@ -579,6 +584,7 @@ fun MessagesList(
 
                         }
                     }
+
                     is MessageItem.MessageDateSeparator -> {
                         Box(
                             modifier = Modifier
@@ -593,6 +599,7 @@ fun MessagesList(
                             )
                         }
                     }
+
                     is MessageItem.NewMessagesSeparator -> {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Spacer(
@@ -697,7 +704,12 @@ fun ChatTopBar(
                         .weight(1f)
                         .padding(start = 5.dp),
                 ) {
-                    Text(text = name ?: defaultName, color = MaterialTheme.colorScheme.onSurface)
+                    Text(
+                        text = name ?: defaultName,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold
+                    )
                     AnimatedVisibility(visible = status != null) {
                         status?.let {
                             Text(
@@ -781,6 +793,8 @@ fun PreviewSentMessage() {
             )
         },
         onLeftSwipe = { },
-        allowedSwipeDirection = SwipeDirection.LEFT
+        allowedSwipeDirection = SwipeDirection.LEFT,
+        hiddenContentColor = MaterialTheme.colorScheme.surfaceVariant,
+        swipableContentColor = MaterialTheme.colorScheme.background
     )
 }

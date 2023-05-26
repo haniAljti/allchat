@@ -20,6 +20,6 @@ interface UserRepository {
         avatar: ContactImage?,
         status: String?
     ): CallResult<Boolean>
-    fun getAllUsers(): Flow<List<User>>
+    fun getAllUsers(): Flow<List<UserDetails>>
     suspend fun getUsers(userIds: List<String>): List<UserEntity>
 }

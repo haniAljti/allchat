@@ -1,36 +1,33 @@
 package com.hanialjti.allchat.presentation.create_chat_room
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.ExperimentalAnimationApi
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.Button
 import androidx.compose.material.CircularProgressIndicator
-import androidx.compose.material.MaterialTheme
-import androidx.compose.material.Text
+import androidx.compose.material3.Button
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.hanialjti.allchat.R
 import com.hanialjti.allchat.data.model.Role
-import com.hanialjti.allchat.data.model.User
+import com.hanialjti.allchat.data.model.UserDetails
 import com.hanialjti.allchat.presentation.component.AllChatTextField
 import com.hanialjti.allchat.presentation.component.TopBar
 import com.hanialjti.allchat.presentation.component.UserItem
 
-@OptIn(ExperimentalAnimationApi::class)
 @Composable
 fun InputRoomInfoScreen(
     title: String,
@@ -39,7 +36,7 @@ fun InputRoomInfoScreen(
     onNameChanged: (String) -> Unit,
 //    image: String,
 //    onImageChanged: (String) -> Unit,
-    invitedUsers: Set<User>,
+    invitedUsers: Set<UserDetails>,
     doneButtonText: String,
     isLoading: Boolean,
     onDoneClicked: () -> Unit,
@@ -48,11 +45,15 @@ fun InputRoomInfoScreen(
     Column(modifier = modifier) {
         TopBar(
             title = title,
-            moreOptions = {},
+            moreOptions = { },
             onBackClicked = { onBackPressed() }
         )
 
-        Column(modifier = Modifier.padding(horizontal = 20.dp).weight(1f)) {
+        Column(
+            modifier = Modifier
+                .padding(horizontal = 20.dp)
+                .weight(1f)
+        ) {
             Spacer(modifier = Modifier.height(5.dp))
 
             AllChatTextField(
@@ -63,7 +64,11 @@ fun InputRoomInfoScreen(
 
             Spacer(modifier = Modifier.height(5.dp))
 
-            Text(text = "Invitees", color = Color.White, fontSize = 20.sp)
+            Text(
+                text = "Invitees",
+                color = MaterialTheme.colorScheme.onBackground,
+                fontSize = 20.sp
+            )
 
             Spacer(modifier = Modifier.height(5.dp))
 
@@ -72,7 +77,7 @@ fun InputRoomInfoScreen(
             ) {
                 items(
                     count = invitedUsers.size,
-                    key = { index -> invitedUsers.elementAt(index).id }
+                    key = { index -> invitedUsers.elementAt(index).id ?: index }
                 ) { index ->
                     val user = invitedUsers.elementAt(index)
 
@@ -91,44 +96,17 @@ fun InputRoomInfoScreen(
             }
         }
 
-        Box(
-            modifier = Modifier
-                .animateContentSize()
-                .fillMaxWidth()
-        ) {
-            AnimatedContent(
-                targetState = isLoading,
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .height(90.dp)
-                    .padding(20.dp)
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(colorResource(id = R.color.green_light))
-            ) { isLoading ->
-                if (isLoading) {
-                    CircularProgressIndicator(
-                        modifier = Modifier
-                            .padding(5.dp)
-                            .align(Alignment.Center),
-                        color = MaterialTheme.colors.background
-                    )
-                } else {
-                    Text(
-                        text = doneButtonText,
-                        color = MaterialTheme.colors.background,
-                        modifier = Modifier
-                            .padding(10.dp)
-                            .fillMaxSize()
-                            .align(Alignment.Center)
-                            .clickable {
-                                onDoneClicked()
-                            },
-                        textAlign = TextAlign.Center
-                    )
-                }
-            }
 
+        Box(Modifier.fillMaxWidth()) {
+            AnimatedLoadingButton(
+                text = doneButtonText,
+                onClick = onDoneClicked,
+                isLoading = isLoading,
+                modifier = Modifier.align(Alignment.Center)
+            )
         }
+
+
 //        Button(
 //            modifier = Modifier
 //                .padding(20.dp)
@@ -139,4 +117,54 @@ fun InputRoomInfoScreen(
 //            Text(text = doneButtonText, modifier = Modifier.padding(10.dp))
 //        }
     }
+}
+
+@Composable
+fun AnimatedLoadingButton(
+    text: String,
+    onClick: () -> Unit,
+    isLoading: Boolean,
+    modifier: Modifier = Modifier
+) {
+    AnimatedContent(
+        targetState = isLoading,
+        modifier = modifier
+            .padding(20.dp)
+            .clip(MaterialTheme.shapes.medium)
+            .background(MaterialTheme.colorScheme.primary),
+        contentAlignment = Alignment.Center
+    ) {
+        if (it) {
+            CircularProgressIndicator(
+                modifier = Modifier
+                    .padding(10.dp),
+                color = MaterialTheme.colorScheme.onPrimary
+            )
+        } else {
+            Button(
+                onClick = onClick,
+                shape = MaterialTheme.shapes.medium,
+                modifier = Modifier
+                    .fillMaxWidth()
+            ) {
+                Text(
+                    text = text,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(10.dp)
+                )
+            }
+        }
+    }
+}
+
+@Preview
+@Composable
+fun AnimatedLoadingButtonPreview() {
+    AnimatedLoadingButton(text = "Done", onClick = { }, isLoading = true)
+}
+
+@Preview
+@Composable
+fun AnimatedNotLoadingButtonPreview() {
+    AnimatedLoadingButton(text = "Done", onClick = { }, isLoading = false)
 }

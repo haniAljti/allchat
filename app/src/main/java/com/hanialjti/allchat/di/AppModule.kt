@@ -11,9 +11,9 @@ import com.hanialjti.allchat.data.remote.FileDownloader
 import com.hanialjti.allchat.data.repository.*
 import com.hanialjti.allchat.data.tasks.ConversationTasksDataStore
 import com.hanialjti.allchat.data.tasks.MessageTasksDataSource
-import com.hanialjti.allchat.domain.MessageTasksDataSourceImpl
-import com.hanialjti.allchat.domain.worker.CreateChatRoomWorker
-import com.hanialjti.allchat.domain.worker.SendMessageWorker
+import com.hanialjti.allchat.data.tasks.MessageTasksDataSourceImpl
+import com.hanialjti.allchat.data.tasks.CreateChatRoomWorker
+import com.hanialjti.allchat.data.tasks.SendMessageWorker
 import com.hanialjti.allchat.presentation.ConnectionLifeCycleObserver
 import com.hanialjti.allchat.presentation.MainViewModel
 import com.hanialjti.allchat.presentation.chat.ChatViewModel

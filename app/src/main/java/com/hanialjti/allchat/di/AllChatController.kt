@@ -1,4 +1,4 @@
-package com.hanialjti.allchat.domain
+package com.hanialjti.allchat.di
 
 //object AllChatController: CustomKoinComponent {
 //

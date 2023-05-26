@@ -20,7 +20,7 @@ class UserInputState(
     var isRecording by mutableStateOf(false)
 
     private val recordSwipeThreshold = 0.5f
-    private val swipeProgress get() = swipeableState.progress.fraction
+     val swipeProgress get() = swipeableState.progress.fraction
     private val isInInitialValue get() = swipeableState.progress.from == swipeableState.progress.to
     val swipeOffset get() = swipeableState.offset.value
     val recordSwipeValue get() = swipeableState.currentValue
